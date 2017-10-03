@@ -20,7 +20,7 @@
  */
 
 /*
- * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2011, 2016 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2013, Joyent, Inc. All rights reserved.
  * Copyright (c) 2014, Nexenta Systems, Inc. All rights reserved.
@@ -142,7 +142,8 @@ deps_contains_feature(const spa_feature_t *deps, const spa_feature_t feature)
 
 static void
 zfeature_register(spa_feature_t fid, const char *guid, const char *name,
-    const char *desc, zfeature_flags_t flags, const spa_feature_t *deps)
+    const char *desc, zfeature_flags_t flags, zfeature_type_t type,
+    const spa_feature_t *deps)
 {
 	zfeature_info_t *feature = &spa_feature_table[fid];
 	static spa_feature_t nodeps[] = { SPA_FEATURE_NONE };
@@ -165,6 +166,7 @@ zfeature_register(spa_feature_t fid, const char *guid, const char *name,
 	feature->fi_uname = name;
 	feature->fi_desc = desc;
 	feature->fi_flags = flags;
+	feature->fi_type = type;
 	feature->fi_depends = deps;
 }
 
@@ -174,32 +176,32 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_ASYNC_DESTROY,
 	    "com.delphix:async_destroy", "async_destroy",
 	    "Destroy filesystems asynchronously.",
-	    ZFEATURE_FLAG_READONLY_COMPAT, NULL);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	zfeature_register(SPA_FEATURE_EMPTY_BPOBJ,
 	    "com.delphix:empty_bpobj", "empty_bpobj",
 	    "Snapshots use less space.",
-	    ZFEATURE_FLAG_READONLY_COMPAT, NULL);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	zfeature_register(SPA_FEATURE_LZ4_COMPRESS,
 	    "org.illumos:lz4_compress", "lz4_compress",
 	    "LZ4 compression algorithm support.",
-	    ZFEATURE_FLAG_ACTIVATE_ON_ENABLE, NULL);
+	    ZFEATURE_FLAG_ACTIVATE_ON_ENABLE, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	zfeature_register(SPA_FEATURE_MULTI_VDEV_CRASH_DUMP,
 	    "com.joyent:multi_vdev_crash_dump", "multi_vdev_crash_dump",
 	    "Crash dumps to multiple vdev pools.",
-	    0, NULL);
+	    0, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	zfeature_register(SPA_FEATURE_SPACEMAP_HISTOGRAM,
 	    "com.delphix:spacemap_histogram", "spacemap_histogram",
 	    "Spacemaps maintain space histograms.",
-	    ZFEATURE_FLAG_READONLY_COMPAT, NULL);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	zfeature_register(SPA_FEATURE_ENABLED_TXG,
 	    "com.delphix:enabled_txg", "enabled_txg",
 	    "Record txg at which a feature is enabled",
-	    ZFEATURE_FLAG_READONLY_COMPAT, NULL);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	static spa_feature_t hole_birth_deps[] = {
 		SPA_FEATURE_ENABLED_TXG,
@@ -209,12 +211,12 @@ zpool_feature_init(void)
 	    "com.delphix:hole_birth", "hole_birth",
 	    "Retain hole birth txg for more precise zfs send",
 	    ZFEATURE_FLAG_MOS | ZFEATURE_FLAG_ACTIVATE_ON_ENABLE,
-	    hole_birth_deps);
+	    ZFEATURE_TYPE_BOOLEAN, hole_birth_deps);
 
 	zfeature_register(SPA_FEATURE_EXTENSIBLE_DATASET,
 	    "com.delphix:extensible_dataset", "extensible_dataset",
 	    "Enhanced dataset functionality, used by other features.",
-	    0, NULL);
+	    0, ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	static const spa_feature_t bookmarks_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -223,7 +225,8 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_BOOKMARKS,
 	    "com.delphix:bookmarks", "bookmarks",
 	    "\"zfs bookmark\" command",
-	    ZFEATURE_FLAG_READONLY_COMPAT, bookmarks_deps);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN,
+	    bookmarks_deps);
 
 	static const spa_feature_t filesystem_limits_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -232,13 +235,14 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_FS_SS_LIMIT,
 	    "com.joyent:filesystem_limits", "filesystem_limits",
 	    "Filesystem and snapshot limits.",
-	    ZFEATURE_FLAG_READONLY_COMPAT, filesystem_limits_deps);
+	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN,
+	    filesystem_limits_deps);
 
 	zfeature_register(SPA_FEATURE_EMBEDDED_DATA,
 	    "com.delphix:embedded_data", "embedded_data",
 	    "Blocks which compress very well use even less space.",
 	    ZFEATURE_FLAG_MOS | ZFEATURE_FLAG_ACTIVATE_ON_ENABLE,
-	    NULL);
+	    ZFEATURE_TYPE_BOOLEAN, NULL);
 
 	static const spa_feature_t large_blocks_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -247,7 +251,8 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_LARGE_BLOCKS,
 	    "org.open-zfs:large_blocks", "large_blocks",
 	    "Support for blocks larger than 128KB.",
-	    ZFEATURE_FLAG_PER_DATASET, large_blocks_deps);
+	    ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_BOOLEAN,
+	    large_blocks_deps);
 
 	static const spa_feature_t sha512_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -256,7 +261,8 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_SHA512,
 	    "org.illumos:sha512", "sha512",
 	    "SHA-512/256 hash algorithm.",
-	    ZFEATURE_FLAG_PER_DATASET, sha512_deps);
+	    ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_BOOLEAN,
+	    sha512_deps);
 
 	static const spa_feature_t skein_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -265,7 +271,8 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_SKEIN,
 	    "org.illumos:skein", "skein",
 	    "Skein hash algorithm.",
-	    ZFEATURE_FLAG_PER_DATASET, skein_deps);
+	    ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_BOOLEAN,
+	    skein_deps);
 
 	static const spa_feature_t edonr_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -274,5 +281,39 @@ zpool_feature_init(void)
 	zfeature_register(SPA_FEATURE_EDONR,
 	    "org.illumos:edonr", "edonr",
 	    "Edon-R hash algorithm.",
-	    ZFEATURE_FLAG_PER_DATASET, edonr_deps);
+	    ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_BOOLEAN,
+	    edonr_deps);
+	static const spa_feature_t redact_books_deps[] = {
+		SPA_FEATURE_EXTENSIBLE_DATASET,
+		SPA_FEATURE_BOOKMARKS,
+		SPA_FEATURE_NONE
+	};
+	zfeature_register(SPA_FEATURE_REDACTION_BOOKMARKS,
+	    "com.delphix:redaction_bookmarks", "redaction_bookmarks",
+	    "Support for bookmarks which store redaction lists for zfs "
+	    "redacted send/recv.", 0, ZFEATURE_TYPE_BOOLEAN,
+	    redact_books_deps);
+
+	static const spa_feature_t redact_datasets_deps[] = {
+		SPA_FEATURE_EXTENSIBLE_DATASET,
+		SPA_FEATURE_NONE
+	};
+	zfeature_register(SPA_FEATURE_REDACTED_DATASETS,
+	    "com.delphix:redacted_datasets", "redacted_datasets", "Support for "
+	    "redacted datasets, produced by receiving a redacted zfs send "
+	    "stream.", ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_UINT64_ARRAY,
+	    redact_datasets_deps);
+
+	static const spa_feature_t bookmark_written_deps[] = {
+		SPA_FEATURE_EXTENSIBLE_DATASET,
+		SPA_FEATURE_BOOKMARKS,
+		SPA_FEATURE_NONE
+	};
+	zfeature_register(SPA_FEATURE_BOOKMARK_WRITTEN,
+	    "com.delphix:bookmark_written", "bookmark_written",
+	    "Additional accounting, enabling the written#<bookmark> property"
+	    "(space written since a bookmark), and estimates of send stream "
+	    "sizes for incrementals from bookmarks.",
+	    0, ZFEATURE_TYPE_BOOLEAN, bookmark_written_deps);
+
 }

@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2017 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
@@ -311,6 +311,7 @@ void dmu_buf_write_embedded(dmu_buf_t *dbuf, void *data,
     bp_embedded_type_t etype, enum zio_compress comp,
     int uncompressed_size, int compressed_size, int byteorder, dmu_tx_t *tx);
 
+void dmu_buf_redact(dmu_buf_t *dbuf, dmu_tx_t *tx);
 void dbuf_destroy(dmu_buf_impl_t *db);
 
 void dbuf_setdirty(dmu_buf_impl_t *db, dmu_tx_t *tx);
@@ -322,6 +323,9 @@ void dbuf_free_range(struct dnode *dn, uint64_t start, uint64_t end,
     struct dmu_tx *);
 
 void dbuf_new_size(dmu_buf_impl_t *db, int size, dmu_tx_t *tx);
+
+int dbuf_dnode_findbp(dnode_t *dn, uint64_t level, uint64_t blkid,
+    blkptr_t *bp, uint16_t *datablkszsec, uint8_t *indblkshift);
 
 #define	DB_DNODE(_db)		((_db)->db_dnode_handle->dnh_dnode)
 #define	DB_DNODE_LOCK(_db)	((_db)->db_dnode_handle->dnh_zrlock)

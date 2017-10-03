@@ -123,6 +123,7 @@ dir path=opt/zfs-tests/tests/functional/pool_names
 dir path=opt/zfs-tests/tests/functional/poolversion
 dir path=opt/zfs-tests/tests/functional/privilege
 dir path=opt/zfs-tests/tests/functional/quota
+dir path=opt/zfs-tests/tests/functional/redacted_send
 dir path=opt/zfs-tests/tests/functional/redundancy
 dir path=opt/zfs-tests/tests/functional/refquota
 dir path=opt/zfs-tests/tests/functional/refreserv
@@ -161,6 +162,7 @@ file path=opt/zfs-tests/bin/dos_ro mode=0555
 file path=opt/zfs-tests/bin/file_check mode=0555
 file path=opt/zfs-tests/bin/file_trunc mode=0555
 file path=opt/zfs-tests/bin/file_write mode=0555
+file path=opt/zfs-tests/bin/get_diff mode=0555
 file path=opt/zfs-tests/bin/getholes mode=0555
 file path=opt/zfs-tests/bin/largest_file mode=0555
 file path=opt/zfs-tests/bin/memory_balloon mode=0555
@@ -2182,6 +2184,45 @@ file path=opt/zfs-tests/tests/functional/quota/quota_004_pos mode=0555
 file path=opt/zfs-tests/tests/functional/quota/quota_005_pos mode=0555
 file path=opt/zfs-tests/tests/functional/quota/quota_006_neg mode=0555
 file path=opt/zfs-tests/tests/functional/quota/setup mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/cleanup mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted.cfg mode=0444
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted.kshlib \
+    mode=0444
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_compressed \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_contents \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_deleted \
+    mode=0555
+file \
+    path=opt/zfs-tests/tests/functional/redacted_send/redacted_disabled_feature \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_embedded \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_holes \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_incrementals \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_largeblocks \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_many_clones \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_mixed_recsize \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_mounts \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_negative \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_origin \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_props \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_resume \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_size mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/redacted_volume \
+    mode=0555
+file path=opt/zfs-tests/tests/functional/redacted_send/setup mode=0555
 file path=opt/zfs-tests/tests/functional/redundancy/cleanup mode=0555
 file path=opt/zfs-tests/tests/functional/redundancy/redundancy.cfg mode=0444
 file path=opt/zfs-tests/tests/functional/redundancy/redundancy.kshlib \
@@ -2287,6 +2328,7 @@ file path=opt/zfs-tests/tests/functional/rsend/rsend_011_pos mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_012_pos mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_013_pos mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_014_pos mode=0555
+file path=opt/zfs-tests/tests/functional/rsend/rsend_016_neg mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_019_pos mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_020_pos mode=0555
 file path=opt/zfs-tests/tests/functional/rsend/rsend_021_pos mode=0555

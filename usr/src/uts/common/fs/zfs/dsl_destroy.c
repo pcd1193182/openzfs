@@ -31,6 +31,7 @@
 #include <sys/dsl_dataset.h>
 #include <sys/dsl_synctask.h>
 #include <sys/dsl_destroy.h>
+#include <sys/dsl_bookmark.h>
 #include <sys/dmu_tx.h>
 #include <sys/dsl_pool.h>
 #include <sys/dsl_dir.h>
@@ -180,10 +181,10 @@ process_old_deadlist(dsl_dataset_t *ds, dsl_dataset_t *ds_prev,
 	    dsl_dataset_phys(ds_next)->ds_deadlist_obj);
 }
 
-static void
-dsl_dataset_remove_clones_key(dsl_dataset_t *ds, uint64_t mintxg, dmu_tx_t *tx)
+void
+dsl_dir_remove_clones_key(dsl_dir_t *dd, uint64_t mintxg, dmu_tx_t *tx)
 {
-	objset_t *mos = ds->ds_dir->dd_pool->dp_meta_objset;
+	objset_t *mos = dd->dd_pool->dp_meta_objset;
 	zap_cursor_t zc;
 	zap_attribute_t za;
 
@@ -192,20 +193,22 @@ dsl_dataset_remove_clones_key(dsl_dataset_t *ds, uint64_t mintxg, dmu_tx_t *tx)
 	 * find the clones, but dsl_deadlist_remove_key() is a no-op so it
 	 * doesn't matter.
 	 */
-	if (dsl_dir_phys(ds->ds_dir)->dd_clones == 0)
+	if (dsl_dir_phys(dd)->dd_clones == 0)
 		return;
 
-	for (zap_cursor_init(&zc, mos, dsl_dir_phys(ds->ds_dir)->dd_clones);
+	for (zap_cursor_init(&zc, mos, dsl_dir_phys(dd)->dd_clones);
 	    zap_cursor_retrieve(&zc, &za) == 0;
 	    zap_cursor_advance(&zc)) {
 		dsl_dataset_t *clone;
 
-		VERIFY0(dsl_dataset_hold_obj(ds->ds_dir->dd_pool,
+		VERIFY0(dsl_dataset_hold_obj(dd->dd_pool,
 		    za.za_first_integer, FTAG, &clone));
+
 		if (clone->ds_dir->dd_origin_txg > mintxg) {
 			dsl_deadlist_remove_key(&clone->ds_deadlist,
 			    mintxg, tx);
-			dsl_dataset_remove_clones_key(clone, mintxg, tx);
+			dsl_dir_remove_clones_key(clone->ds_dir,
+			    mintxg, tx);
 		}
 		dsl_dataset_rele(clone, FTAG);
 	}
@@ -247,11 +250,11 @@ dsl_destroy_snapshot_sync_impl(dsl_dataset_t *ds, boolean_t defer, dmu_tx_t *tx)
 
 	obj = ds->ds_object;
 
+	boolean_t book_exists = dsl_bookmark_ds_destroyed(ds, tx);
+
 	for (spa_feature_t f = 0; f < SPA_FEATURES; f++) {
-		if (ds->ds_feature_inuse[f]) {
-			dsl_dataset_deactivate_feature(obj, f, tx);
-			ds->ds_feature_inuse[f] = B_FALSE;
-		}
+		if (dsl_dataset_feature_is_active(ds, f))
+			dsl_dataset_deactivate_feature(ds, f, tx);
 	}
 	if (dsl_dataset_phys(ds)->ds_prev_snap_obj != 0) {
 		ASSERT3P(ds->ds_prev, ==, NULL);
@@ -333,7 +336,7 @@ dsl_destroy_snapshot_sync_impl(dsl_dataset_t *ds, boolean_t defer, dmu_tx_t *tx)
 	dsl_dataset_phys(ds)->ds_deadlist_obj = 0;
 
 	/* Collapse range in clone heads */
-	dsl_dataset_remove_clones_key(ds,
+	dsl_dir_remove_clones_key(ds->ds_dir,
 	    dsl_dataset_phys(ds)->ds_creation_txg, tx);
 
 	if (ds_next->ds_is_snapshot) {
@@ -362,9 +365,13 @@ dsl_destroy_snapshot_sync_impl(dsl_dataset_t *ds, boolean_t defer, dmu_tx_t *tx)
 		/* Collapse range in this head. */
 		dsl_dataset_t *hds;
 		VERIFY0(dsl_dataset_hold_obj(dp,
-		    dsl_dir_phys(ds->ds_dir)->dd_head_dataset_obj, FTAG, &hds));
-		dsl_deadlist_remove_key(&hds->ds_deadlist,
-		    dsl_dataset_phys(ds)->ds_creation_txg, tx);
+		    dsl_dir_phys(ds->ds_dir)->dd_head_dataset_obj,
+		    FTAG, &hds));
+		if (!book_exists) {
+			/* Collapse range in this head. */
+			dsl_deadlist_remove_key(&hds->ds_deadlist,
+			    dsl_dataset_phys(ds)->ds_creation_txg, tx);
+		}
 		dsl_dataset_rele(hds, FTAG);
 
 	} else {
@@ -785,10 +792,8 @@ dsl_destroy_head_sync_impl(dsl_dataset_t *ds, dmu_tx_t *tx)
 	obj = ds->ds_object;
 
 	for (spa_feature_t f = 0; f < SPA_FEATURES; f++) {
-		if (ds->ds_feature_inuse[f]) {
-			dsl_dataset_deactivate_feature(obj, f, tx);
-			ds->ds_feature_inuse[f] = B_FALSE;
-		}
+		if (dsl_dataset_feature_is_active(ds, f))
+			dsl_dataset_deactivate_feature(ds, f, tx);
 	}
 
 	dsl_scan_ds_destroyed(ds, tx);
@@ -895,8 +900,28 @@ dsl_destroy_head_sync_impl(dsl_dataset_t *ds, dmu_tx_t *tx)
 	VERIFY0(zap_destroy(mos,
 	    dsl_dataset_phys(ds)->ds_snapnames_zapobj, tx));
 
-	if (ds->ds_bookmarks != 0) {
-		VERIFY0(zap_destroy(mos, ds->ds_bookmarks, tx));
+	if (ds->ds_bookmarks_obj != 0) {
+		void *cookie = NULL;
+		dsl_bookmark_node_t *dbn;
+
+		while ((dbn = avl_destroy_nodes(&ds->ds_bookmarks, &cookie)) !=
+		    NULL) {
+			if (dbn->dbn_phys.zbm_redaction_obj != 0) {
+				VERIFY0(dmu_object_free(mos,
+				    dbn->dbn_phys.zbm_redaction_obj, tx));
+				spa_feature_decr(dmu_objset_spa(mos),
+				    SPA_FEATURE_REDACTION_BOOKMARKS, tx);
+			}
+			if (dbn->dbn_phys.zbm_flags & ZBM_FLAG_HAS_FBN) {
+				spa_feature_decr(dmu_objset_spa(mos),
+				    SPA_FEATURE_BOOKMARK_WRITTEN, tx);
+			}
+			spa_strfree(dbn->dbn_name);
+			mutex_destroy(&dbn->dbn_lock);
+			kmem_free(dbn, sizeof (*dbn));
+		}
+		avl_destroy(&ds->ds_bookmarks);
+		VERIFY0(zap_destroy(mos, ds->ds_bookmarks_obj, tx));
 		spa_feature_decr(dp->dp_spa, SPA_FEATURE_BOOKMARKS, tx);
 	}
 

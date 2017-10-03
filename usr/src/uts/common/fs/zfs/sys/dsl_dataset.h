@@ -46,9 +46,11 @@
 extern "C" {
 #endif
 
+extern boolean_t zfs_allow_redacted_dataset_mount;
 struct dsl_dataset;
 struct dsl_dir;
 struct dsl_pool;
+struct zfs_bookmark_phys;
 
 #define	DS_FLAG_INCONSISTENT	(1ULL<<0)
 #define	DS_IS_INCONSISTENT(ds)	\
@@ -99,6 +101,12 @@ struct dsl_pool;
 #define	DS_FIELD_RESUME_LARGEBLOCK "com.delphix:resume_largeblockok"
 #define	DS_FIELD_RESUME_EMBEDOK "com.delphix:resume_embedok"
 #define	DS_FIELD_RESUME_COMPRESSOK "com.delphix:resume_compressok"
+/*
+ * We were receiving an incremental from a redaction bookmark, and these are the
+ * guids of its snapshots.
+ */
+#define	DS_FIELD_RESUME_REDACT_BOOKMARK_SNAPS \
+	"com.delphix:resume_redact_book_snaps"
 
 /*
  * DS_FLAG_CI_DATASET is set if the dataset contains a file system whose
@@ -155,7 +163,8 @@ typedef struct dsl_dataset {
 
 	/* only used in syncing context, only valid for non-snapshots: */
 	struct dsl_dataset *ds_prev;
-	uint64_t ds_bookmarks;  /* DMU_OTN_ZAP_METADATA */
+	uint64_t ds_bookmarks_obj;  /* DMU_OTN_ZAP_METADATA */
+	avl_tree_t ds_bookmarks; /* dsl_bookmark_node_t */
 
 	/* has internal locking: */
 	dsl_deadlist_t ds_deadlist;
@@ -209,13 +218,13 @@ typedef struct dsl_dataset {
 	 * For ZFEATURE_FLAG_PER_DATASET features, set if this dataset
 	 * uses this feature.
 	 */
-	uint8_t ds_feature_inuse[SPA_FEATURES];
+	void *ds_feature[SPA_FEATURES];
 
 	/*
 	 * Set if we need to activate the feature on this dataset this txg
 	 * (used only in syncing context).
 	 */
-	uint8_t ds_feature_activation_needed[SPA_FEATURES];
+	void *ds_feature_activation[SPA_FEATURES];
 
 	/* Protected by ds_lock; keep at end of struct for better locality */
 	char ds_snapname[ZFS_MAX_DATASET_NAME_LEN];
@@ -272,11 +281,15 @@ int dsl_dataset_hold_obj(struct dsl_pool *dp, uint64_t dsobj, void *tag,
 void dsl_dataset_rele(dsl_dataset_t *ds, void *tag);
 int dsl_dataset_own(struct dsl_pool *dp, const char *name,
     void *tag, dsl_dataset_t **dsp);
+int dsl_dataset_own_force(struct dsl_pool *dp, const char *name,
+    void *tag, dsl_dataset_t **dsp);
 int dsl_dataset_own_obj(struct dsl_pool *dp, uint64_t dsobj,
+    void *tag, dsl_dataset_t **dsp);
+int dsl_dataset_own_obj_force(struct dsl_pool *dp, uint64_t dsobj,
     void *tag, dsl_dataset_t **dsp);
 void dsl_dataset_disown(dsl_dataset_t *ds, void *tag);
 void dsl_dataset_name(dsl_dataset_t *ds, char *name);
-boolean_t dsl_dataset_tryown(dsl_dataset_t *ds, void *tag);
+boolean_t dsl_dataset_tryown(dsl_dataset_t *ds, void *tag, boolean_t override);
 int dsl_dataset_namelen(dsl_dataset_t *ds);
 boolean_t dsl_dataset_has_owner(dsl_dataset_t *ds);
 uint64_t dsl_dataset_create_sync(dsl_dir_t *pds, const char *lastname,
@@ -332,9 +345,11 @@ uint64_t dsl_get_defer_destroy(dsl_dataset_t *ds);
 uint64_t dsl_get_referenced(dsl_dataset_t *ds);
 uint64_t dsl_get_numclones(dsl_dataset_t *ds);
 uint64_t dsl_get_inconsistent(dsl_dataset_t *ds);
+uint64_t dsl_get_redacted(dsl_dataset_t *ds);
 uint64_t dsl_get_available(dsl_dataset_t *ds);
 int dsl_get_written(dsl_dataset_t *ds, uint64_t *written);
 int dsl_get_prev_snap(dsl_dataset_t *ds, char *snap);
+void dsl_get_redact_snaps(dsl_dataset_t *ds, nvlist_t *propval);
 int dsl_get_mountpoint(dsl_dataset_t *ds, const char *dsname, char *value,
     char *source);
 
@@ -349,6 +364,8 @@ void dsl_dataset_space(dsl_dataset_t *ds,
 uint64_t dsl_dataset_fsid_guid(dsl_dataset_t *ds);
 int dsl_dataset_space_written(dsl_dataset_t *oldsnap, dsl_dataset_t *new,
     uint64_t *usedp, uint64_t *compp, uint64_t *uncompp);
+int dsl_dataset_space_written_bookmark(struct zfs_bookmark_phys *bmp,
+    dsl_dataset_t *new, uint64_t *usedp, uint64_t *compp, uint64_t *uncompp);
 int dsl_dataset_space_wouldfree(dsl_dataset_t *firstsnap, dsl_dataset_t *last,
     uint64_t *usedp, uint64_t *compp, uint64_t *uncompp);
 boolean_t dsl_dataset_is_dirty(dsl_dataset_t *ds);
@@ -397,8 +414,14 @@ void dsl_dataset_rollback_sync(void *arg, dmu_tx_t *tx);
 int dsl_dataset_rollback(const char *fsname, const char *tosnap, void *owner,
     nvlist_t *result);
 
-void dsl_dataset_deactivate_feature(uint64_t dsobj,
-    spa_feature_t f, dmu_tx_t *tx);
+void dsl_dataset_deactivate_feature(dsl_dataset_t *ds, spa_feature_t f,
+    dmu_tx_t *tx);
+boolean_t dsl_dataset_feature_is_active(dsl_dataset_t *ds, spa_feature_t f);
+boolean_t dsl_dataset_get_uint64_array_feature(dsl_dataset_t *ds,
+    spa_feature_t f, uint64_t *outlength, uint64_t **outp);
+
+void dsl_dataset_activate_redaction(dsl_dataset_t *ds, uint64_t *redact_snaps,
+    uint64_t num_redact_snaps, dmu_tx_t *tx);
 
 #ifdef ZFS_DEBUG
 #define	dprintf_ds(ds, fmt, ...) do { \

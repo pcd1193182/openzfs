@@ -296,7 +296,7 @@ zfs_is_mounted(zfs_handle_t *zhp, char **where)
  */
 static boolean_t
 zfs_is_mountable(zfs_handle_t *zhp, char *buf, size_t buflen,
-    zprop_source_t *source)
+     zprop_source_t *source, int flags)
 {
 	char sourceloc[MAXNAMELEN];
 	zprop_source_t sourcetype;
@@ -317,6 +317,13 @@ zfs_is_mountable(zfs_handle_t *zhp, char *buf, size_t buflen,
 	if (zfs_prop_get_int(zhp, ZFS_PROP_ZONED) &&
 	    getzoneid() == GLOBAL_ZONEID)
 		return (B_FALSE);
+
+	if (zfs_prop_get_int(zhp, ZFS_PROP_ZONED) &&
+	    getzoneid() == GLOBAL_ZONEID)
+		return (B_FALSE);
+
+	if (zfs_prop_get_int(zhp, ZFS_PROP_REDACTED) && !(flags & MS_FORCE))
+                return (B_FALSE);
 
 	if (source)
 		*source = sourcetype;
@@ -346,8 +353,10 @@ zfs_mount(zfs_handle_t *zhp, const char *options, int flags)
 	if (zpool_get_prop_int(zhp->zpool_hdl, ZPOOL_PROP_READONLY, NULL))
 		flags |= MS_RDONLY;
 
-	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint), NULL))
+	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint), NULL,
+	    flags)) {
 		return (0);
+	}
 
 	/* Create the directory if it doesn't already exist */
 	if (lstat(mountpoint, &buf) != 0) {
@@ -800,7 +809,7 @@ zfs_share_proto(zfs_handle_t *zhp, zfs_share_proto_t *proto)
 	zprop_source_t sourcetype;
 	int ret;
 
-	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint), NULL))
+	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint), NULL, 0))
 		return (0);
 
 	for (curr_proto = proto; *curr_proto != PROTO_END; curr_proto++) {
@@ -1061,8 +1070,7 @@ remove_mountpoint(zfs_handle_t *zhp)
 	char mountpoint[ZFS_MAXPROPLEN];
 	zprop_source_t source;
 
-	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint),
-	    &source))
+	if (!zfs_is_mountable(zhp, mountpoint, sizeof (mountpoint), &source, 0))
 		return;
 
 	if (source == ZPROP_SRC_DEFAULT ||
