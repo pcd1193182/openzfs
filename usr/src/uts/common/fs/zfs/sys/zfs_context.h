@@ -72,6 +72,7 @@ extern "C" {
 #include <sys/cyclic.h>
 #include <sys/disp.h>
 #include <sys/callo.h>
+#include <sys/condvar.h>
 
 #define	CPU_SEQID	(CPU->cpu_seqid)
 

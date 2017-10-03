@@ -307,11 +307,18 @@ cv_destroy(kcondvar_t *cv)
 void
 cv_wait(kcondvar_t *cv, kmutex_t *mp)
 {
+	(void) cv_wait_sig(cv, mp);
+}
+
+int
+cv_wait_sig(kcondvar_t *cv, kmutex_t *mp)
+{
 	ASSERT(mutex_owner(mp) == curthread);
 	mp->m_owner = NULL;
 	int ret = cond_wait(cv, &mp->m_lock);
 	VERIFY(ret == 0 || ret == EINTR);
 	mp->m_owner = curthread;
+	return (ret == EINTR ? 0 : 1);
 }
 
 clock_t

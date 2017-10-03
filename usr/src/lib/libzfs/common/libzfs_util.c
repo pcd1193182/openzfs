@@ -240,6 +240,8 @@ libzfs_error_description(libzfs_handle_t *hdl)
 		    "in progress"));
 	case EZFS_CRYPTOFAILED:
 		return (dgettext(TEXT_DOMAIN, "encryption failure"));
+	case EZFS_TOOMANY:
+		return (dgettext(TEXT_DOMAIN, "argument list too long"));
 	case EZFS_UNKNOWN:
 		return (dgettext(TEXT_DOMAIN, "unknown error"));
 	default:

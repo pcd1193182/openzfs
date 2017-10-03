@@ -132,6 +132,7 @@ typedef enum zfs_error {
 	EZFS_SCRUB_PAUSED,	/* scrub currently paused */
 	EZFS_NO_PENDING,	/* cannot cancel, no operation is pending */
 	EZFS_CRYPTOFAILED,	/* failed to setup encryption */
+	EZFS_TOOMANY,		/* argument list too long */
 	EZFS_UNKNOWN
 } zfs_error_t;
 
@@ -601,8 +602,8 @@ extern int zfs_rollback(zfs_handle_t *, zfs_handle_t *, boolean_t);
 extern int zfs_rename(zfs_handle_t *, const char *, boolean_t, boolean_t);
 
 typedef struct sendflags {
-	/* print informational messages (ie, -v was specified) */
-	boolean_t verbose;
+	/* Amount of extra information to print. */
+	int verbosity;
 
 	/* recursive send  (ie, -R) */
 	boolean_t replicate;
@@ -645,7 +646,9 @@ typedef boolean_t (snapfilter_cb_t)(zfs_handle_t *, void *);
 
 extern int zfs_send(zfs_handle_t *, const char *, const char *,
     sendflags_t *, int, snapfilter_cb_t, void *, nvlist_t **);
-extern int zfs_send_one(zfs_handle_t *, const char *, int, enum lzc_send_flags);
+extern int zfs_send_one(zfs_handle_t *, const char *, int, sendflags_t *,
+    const char *);
+extern int zfs_send_progress(zfs_handle_t *, int, uint64_t *, uint64_t *);
 extern int zfs_send_resume(libzfs_handle_t *, sendflags_t *, int outfd,
     const char *);
 extern nvlist_t *zfs_send_resume_token_to_nvlist(libzfs_handle_t *hdl,

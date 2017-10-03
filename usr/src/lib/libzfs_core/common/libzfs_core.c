@@ -541,12 +541,42 @@ int
 lzc_send(const char *snapname, const char *from, int fd,
     enum lzc_send_flags flags)
 {
-	return (lzc_send_resume(snapname, from, fd, flags, 0, 0));
+	return (lzc_send_resume_redacted(snapname, from, fd, flags, 0, 0,
+	    NULL));
+}
+
+int
+lzc_send_redacted(const char *snapname, const char *from, int fd,
+    enum lzc_send_flags flags, const char *redactbook)
+{
+	return (lzc_send_resume_redacted(snapname, from, fd, flags, 0, 0,
+	    redactbook));
 }
 
 int
 lzc_send_resume(const char *snapname, const char *from, int fd,
     enum lzc_send_flags flags, uint64_t resumeobj, uint64_t resumeoff)
+{
+	return (lzc_send_resume_redacted(snapname, from, fd, flags, resumeobj,
+	    resumeoff, NULL));
+}
+
+/*
+ * snapname: The name of the "tosnap", or the snapshot whose contents we are
+ * sending.
+ * from: The name of the "fromsnap", or the incremental source.
+ * fd: File descriptor to write the stream to.
+ * flags: flags that determine features to be used by the stream.
+ * resumeobj: Object to resume from, for resuming send
+ * resumeoff: Offset to resume from, for resuming send.
+ * redactnv: nvlist of string -> boolean(ignored) containing the names of all
+ * the snapshots that we should redact with respect to.
+ * redactbook: Name of the redaction bookmark to create.
+ */
+int
+lzc_send_resume_redacted(const char *snapname, const char *from, int fd,
+    enum lzc_send_flags flags, uint64_t resumeobj, uint64_t resumeoff,
+    const char *redactbook)
 {
 	nvlist_t *args;
 	int err;
@@ -567,6 +597,9 @@ lzc_send_resume(const char *snapname, const char *from, int fd,
 		fnvlist_add_uint64(args, "resume_object", resumeobj);
 		fnvlist_add_uint64(args, "resume_offset", resumeoff);
 	}
+	if (redactbook != NULL)
+		fnvlist_add_string(args, "redactbook", redactbook);
+	
 	err = lzc_ioctl(ZFS_IOC_SEND_NEW, snapname, args, NULL);
 	nvlist_free(args);
 	return (err);
@@ -585,11 +618,13 @@ lzc_send_resume(const char *snapname, const char *from, int fd,
  * are traversed, looking for blocks with a birth time since the creation TXG of
  * the snapshot this bookmark was created from.  This will result in
  * significantly more I/O and be less efficient than a send space estimation on
- * an equivalent snapshot.
+ * an equivalent snapshot. This process is also used if redact_snaps is
+ * non-null.
  */
 int
-lzc_send_space(const char *snapname, const char *from,
-    enum lzc_send_flags flags, uint64_t *spacep)
+lzc_send_space_resume_redacted(const char *snapname, const char *from,
+    enum lzc_send_flags flags, uint64_t resumeobj, uint64_t resumeoff,
+    uint64_t resume_bytes, const char *redactbook, int fd, uint64_t *spacep)
 {
 	nvlist_t *args;
 	nvlist_t *result;
@@ -604,12 +639,30 @@ lzc_send_space(const char *snapname, const char *from,
 		fnvlist_add_boolean(args, "embedok");
 	if (flags & LZC_SEND_FLAG_COMPRESS)
 		fnvlist_add_boolean(args, "compressok");
+	if (resumeobj != 0 || resumeoff != 0) {
+		fnvlist_add_uint64(args, "resume_object", resumeobj);
+		fnvlist_add_uint64(args, "resume_offset", resumeoff);
+		fnvlist_add_uint64(args, "bytes", resume_bytes);
+	}
+	if (redactbook != NULL)
+		fnvlist_add_string(args, "redactbook", redactbook);
+	if (fd != -1)
+		fnvlist_add_int32(args, "fd", fd);
+
 	err = lzc_ioctl(ZFS_IOC_SEND_SPACE, snapname, args, &result);
 	nvlist_free(args);
 	if (err == 0)
 		*spacep = fnvlist_lookup_uint64(result, "space");
 	nvlist_free(result);
 	return (err);
+}
+
+int
+lzc_send_space(const char *snapname, const char *from,
+    enum lzc_send_flags flags, uint64_t *spacep)
+{
+	return (lzc_send_space_resume_redacted(snapname, from, flags, 0, 0, 0,
+	    NULL, -1, spacep));
 }
 
 static int
@@ -855,17 +908,31 @@ lzc_bookmark(nvlist_t *bookmarks, nvlist_t **errlist)
  * parameter is an nvlist of property names (with no values) that will be
  * returned for each bookmark.
  *
- * The following are valid properties on bookmarks, all of which are numbers
- * (represented as uint64 in the nvlist)
+ * The following are valid properties on bookmarks, most of which are numbers
+ * (represented as uint64 in the nvlist), except redact_snaps, which is a
+ * uint64 array, and redact_complete, which is a boolean
  *
  * "guid" - globally unique identifier of the snapshot it refers to
  * "createtxg" - txg when the snapshot it refers to was created
  * "creation" - timestamp when the snapshot it refers to was created
+ * "redact_snaps" - list of guids of the redaction snapshots for the specified
+ *     bookmark.  If the bookmark is not a redaction bookmark, the nvlist will
+ *     not contain an entry for this value.  If it is redacted with respect to
+ *     no snapshots, it will contain value -> NULL uint64 array
+ * "redact_complete" - boolean value; true if the redaction bookmark is
+ *     complete, false otherwise.
  *
  * The format of the returned nvlist as follows:
  * <short name of bookmark> -> {
  *     <name of property> -> {
  *         "value" -> uint64
+ *     }
+ *     ...
+ *     "redact_snaps" -> {
+ *         "value" -> uint64 array
+ *     }
+ *     "redact_complete" -> {
+ *         "value" -> boolean value
  *     }
  *  }
  */
@@ -873,6 +940,33 @@ int
 lzc_get_bookmarks(const char *fsname, nvlist_t *props, nvlist_t **bmarks)
 {
 	return (lzc_ioctl(ZFS_IOC_GET_BOOKMARKS, fsname, props, bmarks));
+}
+
+/*
+ * Get bookmark properties.
+ *
+ * Given a bookmark's full name, retrieve all properties for the bookmark.
+ *
+ * The format of the returned property list is as follows:
+ * {
+ *     <name of property> -> {
+ *         "value" -> uint64
+ *     }
+ *     ...
+ *     "redact_snaps" -> {
+ *         "value" -> uint64 array
+ * }
+ */
+int
+lzc_get_bookmark_props(const char *bookmark, nvlist_t **props)
+{
+	int error;
+
+	nvlist_t *innvl = fnvlist_alloc();
+	error = lzc_ioctl(ZFS_IOC_GET_BOOKMARK_PROPS, bookmark, innvl, props);
+	fnvlist_free(innvl);
+
+	return (error);
 }
 
 /*
@@ -1051,5 +1145,20 @@ lzc_change_key(const char *fsname, uint64_t crypt_cmd, nvlist_t *props,
 	error = lzc_ioctl(ZFS_IOC_CHANGE_KEY, fsname, ioc_args, NULL);
 	nvlist_free(hidden_args);
 	nvlist_free(ioc_args);
+	return (error);
+}
+
+/*
+ * Create a redaction bookmark named bookname by redacting snapshot with respect
+ * to all the snapshots in snapnv.
+ */
+int
+lzc_redact(const char *snapshot, const char *bookname, nvlist_t *snapnv)
+{
+	nvlist_t *args = fnvlist_alloc();
+	fnvlist_add_string(args, "bookname", bookname);
+	fnvlist_add_nvlist(args, "snapnv", snapnv);
+	int error = lzc_ioctl(ZFS_IOC_REDACT, snapshot, args, NULL);
+	fnvlist_free(args);
 	return (error);
 }

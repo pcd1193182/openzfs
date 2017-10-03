@@ -20,7 +20,7 @@
  */
 
 /*
- * Copyright (c) 2011, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2011, 2017 by Delphix. All rights reserved.
  * Copyright (c) 2014 Integros [integros.com]
  */
 
@@ -155,7 +155,7 @@ bptree_visit_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	int err;
 	struct bptree_args *ba = arg;
 
-	if (bp == NULL || BP_IS_HOLE(bp))
+	if (bp == NULL || BP_IS_HOLE(bp) || BP_IS_REDACTED(bp))
 		return (0);
 
 	err = ba->ba_func(ba->ba_arg, bp, ba->ba_tx);

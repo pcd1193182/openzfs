@@ -20,6 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2016 by Delphix. All rights reserved.
  */
 
 #ifndef	_SYS_FS_ZFS_VFSOPS_H
@@ -33,6 +34,7 @@
 #include <sys/sa.h>
 #include <sys/rrwlock.h>
 #include <sys/zfs_ioctl.h>
+#include <sys/objlist.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -138,6 +140,7 @@ extern uint_t zfs_fsyncer_key;
 
 extern int zfs_suspend_fs(zfsvfs_t *zfsvfs);
 extern int zfs_resume_fs(zfsvfs_t *zfsvfs, struct dsl_dataset *ds);
+extern int zfs_end_fs(zfsvfs_t *zfsvfs, struct dsl_dataset *ds);
 extern int zfs_userspace_one(zfsvfs_t *zfsvfs, zfs_userquota_prop_t type,
     const char *domain, uint64_t rid, uint64_t *valuep);
 extern int zfs_userspace_many(zfsvfs_t *zfsvfs, zfs_userquota_prop_t type,
@@ -153,6 +156,7 @@ extern int zfsvfs_create(const char *name, zfsvfs_t **zfvp);
 extern int zfsvfs_create_impl(zfsvfs_t **zfvp, zfsvfs_t *zfsvfs, objset_t *os);
 extern void zfsvfs_free(zfsvfs_t *zfsvfs);
 extern int zfs_check_global_label(const char *dsname, const char *hexsl);
+extern objlist_t *zfs_get_deleteq(objset_t *os);
 
 #ifdef	__cplusplus
 }

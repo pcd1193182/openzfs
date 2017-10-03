@@ -1019,6 +1019,16 @@ dbuf_read_impl(dmu_buf_impl_t *db, zio_t *zio, uint32_t flags)
 		return (0);
 	}
 
+	if (BP_IS_REDACTED(db->db_blkptr)) {
+		ASSERT(dsl_dataset_feature_is_active(
+		    db->db_objset->os_dsl_dataset,
+		    SPA_FEATURE_REDACTED_DATASETS));
+		zio->io_error = EIO;
+		DB_DNODE_EXIT(db);
+		mutex_exit(&db->db_mtx);
+		return;
+	}
+
 	DB_DNODE_EXIT(db);
 
 	db->db_state = DB_READ;
@@ -1977,11 +1987,23 @@ dmu_buf_will_change_crypt_params(dmu_buf_t *db_fake, dmu_tx_t *tx)
 	dr->dt.dl.dr_raw = B_TRUE;
 }
 
-#pragma weak dmu_buf_fill_done = dbuf_fill_done
+static void
+dbuf_override_impl(dmu_buf_impl_t *db, const blkptr_t *bp, dmu_tx_t *tx)
+{
+	struct dirty_leaf *dl;
+
+	ASSERT3U(db->db_last_dirty->dr_txg, ==, tx->tx_txg);
+	dl = &db->db_last_dirty->dt.dl;
+	dl->dr_overridden_by = *bp;
+	dl->dr_override_state = DR_OVERRIDDEN;
+	dl->dr_overridden_by.blk_birth = db->db_last_dirty->dr_txg;
+}
+
 /* ARGSUSED */
 void
-dbuf_fill_done(dmu_buf_impl_t *db, dmu_tx_t *tx)
+dmu_buf_fill_done(dmu_buf_t *dbuf, dmu_tx_t *tx)
 {
+	dmu_buf_impl_t *db = (dmu_buf_impl_t *)dbuf;
 	mutex_enter(&db->db_mtx);
 	DBUF_VERIFY(db);
 
@@ -2034,6 +2056,31 @@ dmu_buf_write_embedded(dmu_buf_t *dbuf, void *data,
 
 	dl->dr_override_state = DR_OVERRIDDEN;
 	dl->dr_overridden_by.blk_birth = db->db_last_dirty->dr_txg;
+}
+
+void
+dmu_buf_redact(dmu_buf_t *dbuf, dmu_tx_t *tx)
+{
+	dmu_buf_impl_t *db = (dmu_buf_impl_t *)dbuf;
+	dmu_object_type_t type;
+	ASSERT(dsl_dataset_feature_is_active(db->db_objset->os_dsl_dataset,
+	    SPA_FEATURE_REDACTED_DATASETS));
+
+	DB_DNODE_ENTER(db);
+	type = DB_DNODE(db)->dn_type;
+	DB_DNODE_EXIT(db);
+
+	ASSERT0(db->db_level);
+	dmu_buf_will_not_fill(dbuf, tx);
+
+	blkptr_t bp = {0};
+	BP_SET_TYPE(&bp, type);
+	BP_SET_LEVEL(&bp, 0);
+	BP_SET_BIRTH(&bp, tx->tx_txg, 0);
+	BP_SET_REDACTED(&bp);
+	BPE_SET_LSIZE(&bp, dbuf->db_size);
+
+	dbuf_override_impl(db, &bp, tx);
 }
 
 /*
@@ -2376,6 +2423,36 @@ dbuf_create(dnode_t *dn, uint8_t level, uint64_t blkid,
 	return (db);
 }
 
+/*
+ * This function returns a block pointer and information about the object,
+ * given a dnode and a block.  This is a publicly accessible version of
+ * dbuf_findbp that only returns some information, rather than the
+ * dbuf.  Note that the dnode passed in must be held, and the dn_struct_rwlock
+ * should be locked as (at least) a reader.
+ */
+int
+dbuf_dnode_findbp(dnode_t *dn, uint64_t level, uint64_t blkid,
+    blkptr_t *bp, uint16_t *datablkszsec, uint8_t *indblkshift)
+{
+	dmu_buf_impl_t *dbp = NULL;
+	blkptr_t *bp2;
+	int err = 0;
+	ASSERT(RW_LOCK_HELD(&dn->dn_struct_rwlock));
+
+	err = dbuf_findbp(dn, level, blkid, B_FALSE, &dbp, &bp2);
+	if (err == 0) {
+		*bp = *bp2;
+		if (dbp != NULL)
+			dbuf_rele(dbp, NULL);
+		if (datablkszsec != NULL)
+			*datablkszsec = dn->dn_phys->dn_datablkszsec;
+		if (indblkshift != NULL)
+			*indblkshift = dn->dn_phys->dn_indblkshift;
+	}
+
+	return (err);
+}
+
 typedef struct dbuf_prefetch_arg {
 	spa_t *dpa_spa;	/* The spa to issue the prefetch in. */
 	zbookmark_phys_t dpa_zb; /* The target block to prefetch. */
@@ -2393,7 +2470,12 @@ typedef struct dbuf_prefetch_arg {
 static void
 dbuf_issue_final_prefetch(dbuf_prefetch_arg_t *dpa, blkptr_t *bp)
 {
-	if (BP_IS_HOLE(bp) || BP_IS_EMBEDDED(bp))
+	ASSERT(!BP_IS_REDACTED(bp) ||
+	    dsl_dataset_feature_is_active(
+	    dpa->dpa_dnode->dn_objset->os_dsl_dataset,
+	    SPA_FEATURE_REDACTED_DATASETS));
+
+	if (BP_IS_HOLE(bp) || BP_IS_EMBEDDED(bp) || BP_IS_REDACTED(bp))
 		return;
 
 	arc_flags_t aflags =
@@ -2458,7 +2540,11 @@ dbuf_prefetch_indirect_done(zio_t *zio, int err, arc_buf_t *abuf, void *private)
 	    (dpa->dpa_epbs * (dpa->dpa_curlevel - dpa->dpa_zb.zb_level));
 	blkptr_t *bp = ((blkptr_t *)abuf->b_data) +
 	    P2PHASE(nextblkid, 1ULL << dpa->dpa_epbs);
-	if (BP_IS_HOLE(bp) || err != 0) {
+	ASSERT(!BP_IS_REDACTED(bp) ||
+	    dsl_dataset_feature_is_active(
+	    dpa->dpa_dnode->dn_objset->os_dsl_dataset,
+	    SPA_FEATURE_REDACTED_DATASETS));
+	if (BP_IS_HOLE(bp) || err != 0 || BP_IS_REDACTED(bp)) {
 		kmem_free(dpa, sizeof (*dpa));
 	} else if (dpa->dpa_curlevel == dpa->dpa_zb.zb_level) {
 		ASSERT3U(nextblkid, ==, dpa->dpa_zb.zb_blkid);
@@ -2562,7 +2648,10 @@ dbuf_prefetch(dnode_t *dn, int64_t level, uint64_t blkid, zio_priority_t prio,
 		ASSERT3U(curblkid, <, dn->dn_phys->dn_nblkptr);
 		bp = dn->dn_phys->dn_blkptr[curblkid];
 	}
-	if (BP_IS_HOLE(&bp))
+	ASSERT(!BP_IS_REDACTED(&bp) ||
+	    dsl_dataset_feature_is_active(dn->dn_objset->os_dsl_dataset,
+	    SPA_FEATURE_REDACTED_DATASETS));
+	if (BP_IS_HOLE(&bp) || BP_IS_REDACTED(&bp))
 		return;
 
 	ASSERT3U(curlevel, ==, BP_GET_LEVEL(&bp));
