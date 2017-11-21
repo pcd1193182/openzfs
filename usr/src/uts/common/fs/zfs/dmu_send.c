@@ -2292,7 +2292,7 @@ dmu_send_impl(struct dmu_send_params *dspp)
 		fnvlist_free(keynvl);
 	}
 
-	if (fnvlist_num_pairs(nvl) > 0) {
+	if (!nvlist_empty(nvl)) {
 
 		payload = fnvlist_pack(nvl, &payload_len);
 		drr->drr_payloadlen = payload_len;

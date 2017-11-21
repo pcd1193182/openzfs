@@ -1787,7 +1787,7 @@ find_redact_book(libzfs_handle_t *hdl, const char *path,
 	    "cannot resume send"));
 
 	fnvlist_add_boolean(props, "redact_complete");
-	fnvlist_add_boolean(props, "redact_snaps");
+	fnvlist_add_boolean(props, zfs_prop_to_name(ZFS_PROP_REDACT_SNAPS));
 	error = lzc_get_bookmarks(path, props, &bmarks);
 	nvlist_free(props);
 	if (error != 0) {
@@ -1809,7 +1809,7 @@ find_redact_book(libzfs_handle_t *hdl, const char *path,
 
 		nvlist_t *bmark = fnvpair_value_nvlist(pair);
 		nvlist_t *vallist = fnvlist_lookup_nvlist(bmark,
-		    "redact_snaps");
+		    zfs_prop_to_name(ZFS_PROP_REDACT_SNAPS));
 		uint_t len = 0;
 		uint64_t *bmarksnaps = fnvlist_lookup_uint64_array(vallist,
 		    ZPROP_VALUE, &len);
@@ -1933,8 +1933,9 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 
 	redact_snap_guids = NULL;
 
-	if (nvlist_lookup_uint64_array(resume_nvl, "redact_snaps",
-	    &redact_snap_guids, (uint_t *)&num_redact_snaps) == 0) {
+	if (nvlist_lookup_uint64_array(resume_nvl,
+	    zfs_prop_to_name(ZFS_PROP_REDACT_SNAPS), &redact_snap_guids,
+	    (uint_t *)&num_redact_snaps) == 0) {
 		char path[ZFS_MAX_DATASET_NAME_LEN];
 
 		(void) strlcpy(path, toname, sizeof (path));
@@ -2047,6 +2048,9 @@ zfs_send_resume(libzfs_handle_t *hdl, sendflags_t *flags, int outfd,
 		default:
 			return (zfs_standard_error(hdl, errno, errbuf));
 		}
+	} else {
+		if (redact_book != NULL)
+			free(redact_book);
 	}
 
 	zfs_close(zhp);
@@ -3020,7 +3024,8 @@ redact_snaps_match(zfs_handle_t *zhp, guid_to_name_data_t *gtnd)
 	if (zhp->zfs_type != ZFS_TYPE_BOOKMARK)
 		return (B_FALSE);
 
-	nvl = fnvlist_lookup_nvlist(zhp->zfs_props, "redact_snaps");
+	nvl = fnvlist_lookup_nvlist(zhp->zfs_props,
+	    zfs_prop_to_name(ZFS_PROP_REDACT_SNAPS));
 	bmark_snaps = fnvlist_lookup_uint64_array(nvl, ZPROP_VALUE,
 	    &bmark_num_snaps);
 	if (bmark_num_snaps != gtnd->num_redact_snaps)

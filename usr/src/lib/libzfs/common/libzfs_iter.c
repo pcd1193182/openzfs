@@ -193,7 +193,6 @@ zfs_iter_bookmarks(zfs_handle_t *zhp, zfs_iter_f func, void *data)
 			fnvlist_add_boolean(props, zfs_prop_to_name(p));
 		}
 	}
-	fnvlist_add_boolean(props, "redact_snaps");
 	fnvlist_add_boolean(props, "redact_complete");
 
 	if ((err = lzc_get_bookmarks(zhp->zfs_name, props, &bmarks)) != 0)

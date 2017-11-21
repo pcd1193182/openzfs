@@ -4045,7 +4045,7 @@ zfs_do_send(int argc, char **argv)
 		return (err != 0);
 	}
 
-	if (fromname && strchr(fromname, '#')) {
+	if (fromname != NULL && strchr(fromname, '#')) {
 		(void) fprintf(stderr,
 		    gettext("Error: multiple snapshots cannot be "
 		    "sent from a bookmark.\n"));

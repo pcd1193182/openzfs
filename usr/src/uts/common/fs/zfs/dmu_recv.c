@@ -1556,8 +1556,7 @@ receive_spill(struct receive_writer_arg *rwa, struct drr_spill *drrs,
 		VERIFY0(dmu_object_dirty_raw(rwa->os, drrs->drr_object, tx));
 
 	if (db_spill->db_size < drrs->drr_length)
-		VERIFY(0 == dbuf_spill_set_blksz(db_spill,
-		    drrs->drr_length, tx));
+		VERIFY0(dbuf_spill_set_blksz(db_spill, drrs->drr_length, tx));
 	dbuf_assign_arcbuf((dmu_buf_impl_t *)db_spill, abuf, tx);
 
 	dmu_buf_rele(db, FTAG);

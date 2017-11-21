@@ -1323,6 +1323,7 @@ dsl_bookmark_sync_done(dsl_dataset_t *ds, dmu_tx_t *tx)
 uint64_t
 dsl_bookmark_latest_txg(dsl_dataset_t *ds)
 {
+	ASSERT(dsl_pool_config_held(ds->ds_dir->dd_pool));
 	dsl_bookmark_node_t *dbn = avl_last(&ds->ds_bookmarks);
 	if (dbn == NULL)
 		return (0);

@@ -1265,7 +1265,7 @@ dmu_redact(objset_t *os, uint64_t object, uint64_t offset, uint64_t size,
 	int numbufs, i;
 	dmu_buf_t **dbp;
 
-	VERIFY(0 == dmu_buf_hold_array(os, object, offset, size, FALSE, FTAG,
+	VERIFY0(dmu_buf_hold_array(os, object, offset, size, FALSE, FTAG,
 	    &numbufs, &dbp));
 	for (i = 0; i < numbufs; i++)
 		dmu_buf_redact(dbp[i], tx);
