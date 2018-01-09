@@ -1086,8 +1086,6 @@ dsl_dir_get_remaptxg(dsl_dir_t *dd, uint64_t *count)
 void
 dsl_dir_stats(dsl_dir_t *dd, nvlist_t *nv)
 {
-	uint64_t intval;
-
 	mutex_enter(&dd->dd_lock);
 	dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_QUOTA,
 	    dsl_dir_get_quota(dd));
@@ -1107,19 +1105,14 @@ dsl_dir_stats(dsl_dir_t *dd, nvlist_t *nv)
 	}
 	mutex_exit(&dd->dd_lock);
 
-	if (dsl_dir_is_zapified(dd)) {
-		objset_t *os = dd->dd_pool->dp_meta_objset;
-
-		if (zap_lookup(os, dd->dd_object, DD_FIELD_FILESYSTEM_COUNT,
-		    sizeof (intval), 1, &intval) == 0) {
-			dsl_prop_nvlist_add_uint64(nv,
-			    ZFS_PROP_FILESYSTEM_COUNT, intval);
-		}
-		if (zap_lookup(os, dd->dd_object, DD_FIELD_SNAPSHOT_COUNT,
-		    sizeof (intval), 1, &intval) == 0) {
-			dsl_prop_nvlist_add_uint64(nv,
-			    ZFS_PROP_SNAPSHOT_COUNT, intval);
-		}
+	uint64_t count;
+	if (dsl_dir_get_filesystem_count(dd, &count) == 0) {
+		dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_FILESYSTEM_COUNT,
+		    count);
+	}
+	if (dsl_dir_get_snapshot_count(dd, &count) == 0) {
+		dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_SNAPSHOT_COUNT,
+		    count);
 	}
 	if (dsl_dir_get_remaptxg(dd, &count) == 0) {
 		dsl_prop_nvlist_add_uint64(nv, ZFS_PROP_REMAPTXG,
