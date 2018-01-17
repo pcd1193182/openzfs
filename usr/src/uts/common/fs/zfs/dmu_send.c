@@ -198,12 +198,13 @@ struct send_range {
 		} hole;
 		struct sro {
 			/*
-			 * This is a pointer because embedding it in the struct
-			 * causes these structures to be massively larger for
-			 * all range types; this makes the code much less memory
-			 * efficient.
+			 * These are ointers because embedding them in the
+			 * struct causes these structures to be massively larger
+			 * for all range types; this makes the code much less
+			 * memory efficient.
 			 */
 			dnode_phys_t		*dnp;
+			blkptr_t		*bp;
 		} object;
 		struct srr {
 			uint32_t		datablksz;
@@ -248,6 +249,8 @@ range_free(struct send_range *range)
 	if (range->type == OBJECT) {
 		kmem_free(range->sru.object.dnp,
 		    sizeof (*range->sru.object.dnp));
+		kmem_free(range->sru.object.bp,
+		    sizeof (*range->sru.object.bp));
 	}
 	kmem_free(range, sizeof (*range));
 }
@@ -813,7 +816,8 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 	int err = 0;
 	switch (range->type) {
 	case OBJECT:
-		err = dump_dnode(dscp, range->object, range->sru.object.dnp);
+		err = dump_dnode(dscp, range->sru.object.bp, range->object,
+		    range->sru.object.dnp);
 		return (err);
 	case REDACT: {
 		struct srr *srrp = &range->sru.redact;
@@ -1057,10 +1061,12 @@ send_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 		return (0);
 	atomic_inc_64(sta->num_blocks_visited);
 
-	if (bp == NULL) {
+	if (zb->zb_level == ZB_DNODE_LEVEL) {
 		if (zb->zb_object == DMU_META_DNODE_OBJECT)
 			return (0);
 		record = range_alloc(OBJECT, zb->zb_object, 0, 0, B_FALSE);
+		record->sru.object.bp = kmem_alloc(sizeof (*bp), KM_SLEEP);
+		*record->sru.object.bp = *bp;
 		record->sru.object.dnp = kmem_alloc(sizeof (*dnp), KM_SLEEP);
 		*record->sru.object.dnp = *dnp;
 		bqueue_enqueue(&sta->q, record, sizeof (*record));

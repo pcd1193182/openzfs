@@ -197,7 +197,7 @@ redact_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	 * If we're visiting a dnode, we need to handle the case where the
 	 * object has been deleted.
 	 */
-	if (bp == NULL) {
+	if (zb->zb_level == ZB_DNODE_LEVEL) {
 		ASSERT3U(zb->zb_level, ==, ZB_DNODE_LEVEL);
 
 		if (zb->zb_object == 0)
