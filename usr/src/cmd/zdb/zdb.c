@@ -1928,7 +1928,7 @@ open_objset(const char *path, void *tag, objset_t **osp)
 	 * dance: hold the objset, then acquire a long hold on its dataset, then
 	 * release the pool.
 	 */
-	err = dmu_objset_hold(path, B_FALSE, tag, osp);
+	err = dmu_objset_hold(path, tag, osp);
 	if (err != 0) {
 		(void) fprintf(stderr, "failed to hold dataset '%s': %s\n",
 		    path, strerror(err));
@@ -2366,7 +2366,7 @@ dump_dir(objset_t *os)
 	dsl_pool_config_exit(dmu_objset_pool(os), FTAG);
 
 	print_header = B_TRUE;
-	
+
 	if (dds.dds_type < DMU_OST_NUMTYPES)
 		type = objset_types[dds.dds_type];
 
@@ -2423,7 +2423,7 @@ dump_dir(objset_t *os)
 
 	if (dmu_objset_ds(os) != NULL)
 		dump_bookmarks(os, osname, verbosity);
-	
+
 	if (verbosity < 2)
 		return;
 
@@ -2791,7 +2791,7 @@ dump_one_dir(const char *dsname, void *arg)
 	if (dsl_dataset_remap_deadlist_exists(dmu_objset_ds(os))) {
 		remap_deadlist_count++;
 	}
-	
+
 	for (dsl_bookmark_node_t *dbn =
 	    avl_first(&dmu_objset_ds(os)->ds_bookmarks); dbn != NULL;
 	    dbn = AVL_NEXT(&dmu_objset_ds(os)->ds_bookmarks, dbn)) {
@@ -4091,7 +4091,7 @@ dump_zpool(spa_t *spa)
 			global_feature_count[f] = UINT64_MAX;
 		global_feature_count[SPA_FEATURE_REDACTION_BOOKMARKS] = 0;
 		global_feature_count[SPA_FEATURE_BOOKMARK_WRITTEN] = 0;
-		
+
 		(void) dmu_objset_find(spa_name(spa), dump_one_dir,
 		    NULL, DS_FIND_SNAPSHOTS | DS_FIND_CHILDREN);
 

@@ -2267,7 +2267,8 @@ zfs_send(zfs_handle_t *zhp, const char *fromsnap, const char *tosnap,
 		    full_tosnap_name, ZFS_TYPE_SNAPSHOT);
 		err = send_prelim_records(tosnap, fromsnap, outfd,
 		    flags->replicate || flags->props, flags->replicate,
-		    flags->verbosity > 0, flags->dryrun, flags->raw, &fss, &fsavl);
+		    flags->verbosity > 0, flags->dryrun, flags->raw, &fss,
+		    &fsavl);
 		zfs_close(tosnap);
 		if (err != 0)
 			goto err_out;
@@ -2569,7 +2570,8 @@ zfs_send_one(zfs_handle_t *zhp, const char *from, int fd, sendflags_t *flags,
 		 * when receiving this type of stream.
 		 */
 		err = send_prelim_records(zhp, NULL, fd, B_TRUE, B_FALSE,
-		    flags->verbosity > 0, flags->dryrun, NULL, NULL);
+		    flags->verbosity > 0, flags->dryrun, flags->raw, NULL,
+		    NULL);
 		if (err != 0)
 			return (err);
 	}

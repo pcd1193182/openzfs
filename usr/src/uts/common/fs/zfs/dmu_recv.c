@@ -1977,7 +1977,7 @@ receive_read_record(dmu_recv_cookie_t *drc)
 	}
 	case DRR_OBJECT_RANGE:
 	{
-		err = receive_read_payload_and_next_header(ra, 0, NULL);
+		err = receive_read_payload_and_next_header(drc, 0, NULL);
 		return (err);
 
 	}

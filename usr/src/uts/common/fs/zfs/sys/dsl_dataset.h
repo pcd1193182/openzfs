@@ -327,8 +327,7 @@ int dsl_dataset_own_obj_force(struct dsl_pool *dp, uint64_t dsobj,
     ds_hold_flags_t flags, void *tag, dsl_dataset_t **dsp);
 void dsl_dataset_disown(dsl_dataset_t *ds, ds_hold_flags_t flags, void *tag);
 void dsl_dataset_name(dsl_dataset_t *ds, char *name);
-boolean_t dsl_dataset_tryown(dsl_dataset_t *ds, ds_hold_flags_t flags,
-    void *tag, boolean_t override);
+boolean_t dsl_dataset_tryown(dsl_dataset_t *ds, void *tag, boolean_t override);
 int dsl_dataset_namelen(dsl_dataset_t *ds);
 boolean_t dsl_dataset_has_owner(dsl_dataset_t *ds);
 uint64_t dsl_dataset_create_sync(dsl_dir_t *pds, const char *lastname,
@@ -463,6 +462,8 @@ void dsl_dataset_create_remap_deadlist(dsl_dataset_t *ds, dmu_tx_t *tx);
 boolean_t dsl_dataset_remap_deadlist_exists(dsl_dataset_t *ds);
 void dsl_dataset_destroy_remap_deadlist(dsl_dataset_t *ds, dmu_tx_t *tx);
 
+void dsl_dataset_activate_feature(uint64_t dsobj, spa_feature_t f, void *arg,
+    dmu_tx_t *tx);
 void dsl_dataset_deactivate_feature(dsl_dataset_t *ds, spa_feature_t f,
     dmu_tx_t *tx);
 boolean_t dsl_dataset_feature_is_active(dsl_dataset_t *ds, spa_feature_t f);

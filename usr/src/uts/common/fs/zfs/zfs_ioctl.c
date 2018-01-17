@@ -6214,15 +6214,22 @@ zfs_ioctl_init(void)
 	    POOL_NAME, POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE,
 	    B_TRUE);
 
+        zfs_ioctl_register("load-key", ZFS_IOC_LOAD_KEY,
 	    zfs_ioc_load_key, zfs_secpolicy_load_key,
 	    DATASET_NAME, POOL_CHECK_SUSPENDED, B_TRUE, B_TRUE);
 	zfs_ioctl_register("unload-key", ZFS_IOC_UNLOAD_KEY,
 	    zfs_ioc_unload_key, zfs_secpolicy_load_key,
 	    DATASET_NAME, POOL_CHECK_SUSPENDED, B_TRUE, B_TRUE);
 	zfs_ioctl_register("change-key", ZFS_IOC_CHANGE_KEY,
+	    zfs_ioc_change_key, zfs_secpolicy_change_key,
+	    DATASET_NAME, POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY,
 	    B_TRUE, B_TRUE);
 
-	/* IOCTLS that use the legacy function signature */
+        zfs_ioctl_register("redact", ZFS_IOC_REDACT,
+            zfs_ioc_redact, zfs_secpolicy_config, DATASET_NAME,
+            POOL_CHECK_SUSPENDED | POOL_CHECK_READONLY, B_TRUE, B_TRUE);
+
+        /* IOCTLS that use the legacy function signature */
 
 	zfs_ioctl_register_legacy(ZFS_IOC_POOL_FREEZE, zfs_ioc_pool_freeze,
 	    zfs_secpolicy_config, NO_NAME, B_FALSE, POOL_CHECK_READONLY);
