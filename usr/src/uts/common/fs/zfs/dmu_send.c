@@ -438,11 +438,11 @@ dump_redact(dmu_send_cookie_t *dscp, uint64_t object, uint64_t offset,
 }
 
 static int
-dump_write(dmu_sendarg_t *dsp, dmu_object_type_t type, uint64_t object,
+dump_write(dmu_send_cookie_t *dscp, dmu_object_type_t type, uint64_t object,
     uint64_t offset, int lsize, int psize, const blkptr_t *bp, void *data)
 {
 	uint64_t payload_size;
-	boolean_t raw = (dsp->dsa_featureflags & DMU_BACKUP_FEATURE_RAW);
+	boolean_t raw = (dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW);
 	struct drr_write *drrw = &(dscp->dsc_drr->drr_u.drr_write);
 
 	/*
@@ -477,7 +477,7 @@ dump_write(dmu_sendarg_t *dsp, dmu_object_type_t type, uint64_t object,
 
 	/* only set the compression fields if the buf is compressed or raw */
 	if (raw || lsize != psize) {
-		ASSERT(raw || dsp->dsa_featureflags & DMU_BACKUP_FEATURE_COMPRESSED);
+		ASSERT(raw || dscp->dsc_featureflags & DMU_BACKUP_FEATURE_COMPRESSED);
 		ASSERT(!BP_IS_EMBEDDED(bp));
 		ASSERT3S(psize, >, 0);
 
@@ -497,7 +497,7 @@ dump_write(dmu_sendarg_t *dsp, dmu_object_type_t type, uint64_t object,
 			zio_crypt_decode_mac_bp(bp, drrw->drr_mac);
 		} else {
 			/* this is a compressed block */
-			ASSERT(dsp->dsa_featureflags &
+			ASSERT(dscp->dsc_featureflags &
 			    DMU_BACKUP_FEATURE_COMPRESSED);
 			ASSERT(!BP_SHOULD_BYTESWAP(bp));
 			ASSERT(!DMU_OT_IS_METADATA(BP_GET_TYPE(bp)));
@@ -574,7 +574,7 @@ dump_write_embedded(dmu_send_cookie_t *dscp, uint64_t object, uint64_t offset,
 
 static int
 dump_spill(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t object,
-    int blksz, void *data)
+    void *data)
 {
 	struct drr_spill *drrs = &(dscp->dsc_drr->drr_u.drr_spill);
 	uint64_t blksz = BP_GET_LSIZE(bp);
@@ -705,7 +705,7 @@ dump_dnode(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t object,
 
 	bonuslen = P2ROUNDUP(dnp->dn_bonuslen, 8);
 
-	if ((dsp->dsa_featureflags & DMU_BACKUP_FEATURE_RAW)) {
+	if ((dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW)) {
 		ASSERT(BP_IS_ENCRYPTED(bp));
 
 		if (BP_SHOULD_BYTESWAP(bp))
@@ -741,36 +741,36 @@ dump_dnode(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t object,
 }
 
 static int
-dump_object_range(dmu_sendarg_t *dsp, const blkptr_t *bp, uint64_t firstobj,
+dump_object_range(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t firstobj,
     uint64_t numslots)
 {
 	struct drr_object_range *drror =
-	    &(dsp->dsa_drr->drr_u.drr_object_range);
+	    &(dscp->dsc_drr->drr_u.drr_object_range);
 
 	/* we only use this record type for raw sends */
 	ASSERT(BP_IS_PROTECTED(bp));
-	ASSERT(dsp->dsa_featureflags & DMU_BACKUP_FEATURE_RAW);
+	ASSERT(dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW);
 	ASSERT3U(BP_GET_COMPRESS(bp), ==, ZIO_COMPRESS_OFF);
 	ASSERT3U(BP_GET_TYPE(bp), ==, DMU_OT_DNODE);
 	ASSERT0(BP_GET_LEVEL(bp));
 
-	if (dsp->dsa_pending_op != PENDING_NONE) {
-		if (dump_record(dsp, NULL, 0) != 0)
+	if (dscp->dsc_pending_op != PENDING_NONE) {
+		if (dump_record(dscp, NULL, 0) != 0)
 			return (SET_ERROR(EINTR));
-		dsp->dsa_pending_op = PENDING_NONE;
+		dscp->dsc_pending_op = PENDING_NONE;
 	}
 
-	bzero(dsp->dsa_drr, sizeof (dmu_replay_record_t));
-	dsp->dsa_drr->drr_type = DRR_OBJECT_RANGE;
+	bzero(dscp->dsc_drr, sizeof (dmu_replay_record_t));
+	dscp->dsc_drr->drr_type = DRR_OBJECT_RANGE;
 	drror->drr_firstobj = firstobj;
 	drror->drr_numslots = numslots;
-	drror->drr_toguid = dsp->dsa_toguid;
+	drror->drr_toguid = dscp->dsc_toguid;
 	if (BP_SHOULD_BYTESWAP(bp))
 		drror->drr_flags |= DRR_RAW_BYTESWAP;
 	zio_crypt_decode_params_bp(bp, drror->drr_salt, drror->drr_iv);
 	zio_crypt_decode_mac_bp(bp, drror->drr_mac);
 
-	if (dump_record(dsp, NULL, 0) != 0)
+	if (dump_record(dscp, NULL, 0) != 0)
 		return (SET_ERROR(EINTR));
 	return (0);
 }
@@ -833,7 +833,7 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 			arc_flags_t aflags = ARC_FLAG_WAIT;
 			enum zio_flag zioflags = ZIO_FLAG_CANFAIL;
 
-			if (dsa->dsa_featureflags & DMU_BACKUP_FEATURE_RAW) {
+			if (dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW) {
 				ASSERT(BP_IS_PROTECTED(bp));
 				zioflags |= ZIO_FLAG_RAW;
 			}
@@ -848,10 +848,10 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 
 			if (!dscp->dsc_dso->dso_dryrun && arc_read(NULL, spa,
 			    bp, arc_getbuf_func, &abuf, ZIO_PRIORITY_ASYNC_READ,
-		    ZIO_PRIORITY_ASYNC_READ, zioflags, &aflags, zb) != 0)
+			    zioflags, &aflags, &zb) != 0)
 				return (SET_ERROR(EIO));
 
-		err = dump_spill(dsa, bp, zb->zb_object, abuf->b_data);
+			err = dump_spill(dscp, bp, zb.zb_object, abuf->b_data);
 			arc_buf_destroy(abuf, &abuf);
 			return (err);
 		}
@@ -884,7 +884,7 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 		 * on disk, so we assert that we are not splitting blocks here.
 		 */
 		boolean_t request_raw =
-		    (dsa->dsa_featureflags & DMU_BACKUP_FEATURE_RAW) != 0;
+		    (dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW) != 0;
 
 		/*
 		 * We should only request compressed data from the ARC if all
@@ -912,6 +912,8 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 				zioflags |= ZIO_FLAG_RAW;
 			else if (request_compressed)
 				zioflags |= ZIO_FLAG_RAW_COMPRESS;
+			zbookmark_phys_t zb;
+                        zb.zb_objset = dmu_objset_id(dscp->dsc_os);
 			zb.zb_object = range->object;
 			zb.zb_level = 0;
 			zb.zb_blkid = range->start_blkid;
@@ -1038,11 +1040,13 @@ send_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 	 * All bps of an encrypted os should have the encryption bit set.
 	 * If this is not true it indicates tampering and we report an error.
 	 */
-	if (dsa->dsa_os->os_encrypted &&
+	objset_t *os;
+	VERIFY0(dmu_objset_from_ds(sta->ds, &os));
+	if (os->os_encrypted &&
 	    !BP_IS_HOLE(bp) && !BP_USES_CRYPT(bp)) {
 		spa_log_error(spa, zb);
 		zfs_panic_recover("unencrypted block in encrypted "
-		    "object set %llu", ds->ds_object);
+		    "object set %llu", sta->ds->ds_object);
 		return (SET_ERROR(EIO));
 	}
 
@@ -1226,7 +1230,7 @@ get_next_range_nofree(bqueue_t *bq, struct send_range *prev)
 	ASSERT3S(send_range_after(prev, next), ==, -1);
 	return (next);
 }
-    int outfd, uint64_t resumeobj, uint64_t resumeoff,
+
 /*
  * Pop the new data off the queue, check that the records we receive are in
  * the right order, and free the old data.
@@ -1783,7 +1787,7 @@ setup_featureflags(struct dmu_send_params *dspp, objset_t *os,
 	if (dspp->compressok || dspp->rawok)
 		*featureflags |= DMU_BACKUP_FEATURE_COMPRESSED;
 	if (dspp->rawok && os->os_encrypted)
-		featureflags |= DMU_BACKUP_FEATURE_RAW;
+		*featureflags |= DMU_BACKUP_FEATURE_RAW;
 
 	if ((*featureflags &
 	    (DMU_BACKUP_FEATURE_EMBED_DATA | DMU_BACKUP_FEATURE_COMPRESSED |
@@ -1839,7 +1843,7 @@ create_begin_record(struct dmu_send_params *dspp, objset_t *os,
 
 static void
 setup_to_thread(struct send_thread_arg *to_arg, dsl_dataset_t *to_ds,
-    dmu_sendstatus_t *dssp, uint64_t fromtxg)
+    dmu_sendstatus_t *dssp, uint64_t fromtxg, boolean_t rawok)
 {
 	VERIFY0(bqueue_init(&to_arg->q, zfs_send_no_prefetch_queue_ff,
 	    zfs_send_no_prefetch_queue_length,
@@ -1849,7 +1853,7 @@ setup_to_thread(struct send_thread_arg *to_arg, dsl_dataset_t *to_ds,
 	to_arg->ds = to_ds;
 	to_arg->fromtxg = fromtxg;
 	to_arg->flags = TRAVERSE_PRE | TRAVERSE_PREFETCH_METADATA;
-	if (dspp->rawok)
+	if (rawok)
 		to_arg->flags |= TRAVERSE_NO_DECRYPT;
 	to_arg->redaction_list = NULL;
 	to_arg->num_blocks_visited = &dssp->dss_blocks;
@@ -2155,7 +2159,7 @@ dmu_send_impl(struct dmu_send_params *dspp)
 	 * either a snapshot or we have owned the dataset, ensuring that
 	 * it can't be modified.
 	 */
-	if (!rawok && os->os_encrypted &&
+	if (!dspp->rawok && os->os_encrypted &&
 	    arc_is_unauthenticated(os->os_phys_buf)) {
 		err = arc_untransform(os->os_phys_buf, os->os_spa,
 		    to_ds->ds_object, B_FALSE);
@@ -2306,7 +2310,7 @@ dmu_send_impl(struct dmu_send_params *dspp)
 		goto out;
 	}
 
-	setup_to_thread(&to_arg, to_ds, dssp, fromtxg);
+	setup_to_thread(&to_arg, to_ds, dssp, fromtxg, dspp->rawok);
 	setup_from_thread(&from_arg, from_rl, dssp);
 	setup_redact_list_thread(&rlt_arg, dspp, redact_rl, dssp);
 	setup_merge_thread(&smt_arg, dspp, &from_arg, &to_arg, &rlt_arg, os);
@@ -2388,14 +2392,16 @@ out:
 }
 
 static int
-dsl_dataset_walk_origin(dsl_pool_t *dp, dsl_dataset_t **ds, void *tag)
+dsl_dataset_walk_origin(dsl_pool_t *dp, dsl_dataset_t **ds,
+    ds_hold_flags_t dsflags, void *tag)
 {
 	uint64_t origin_obj = dsl_dir_phys((*ds)->ds_dir)->dd_origin_obj;
 	dsl_dataset_t *prev;
-	int err = dsl_dataset_hold_obj(dp, origin_obj, tag, &prev);
+	int err = dsl_dataset_hold_obj_flags(dp, origin_obj, dsflags, tag,
+	    &prev);
 	if (err != 0)
 		return (err);
-	dsl_dataset_rele(*ds, tag);
+	dsl_dataset_rele_flags(*ds, dsflags, tag);
 	*ds = prev;
 	prev = NULL;
 	return (err);
@@ -2423,16 +2429,18 @@ dmu_send_obj(const char *pool, uint64_t tosnap, uint64_t fromsnap,
 	if (err != 0)
 		return (err);
 
-	err = dsl_dataset_hold_obj(dspp.dp, tosnap, dsflags, FTAG, &dspp.to_ds);
+	err = dsl_dataset_hold_obj_flags(dspp.dp, tosnap, dsflags, FTAG,
+	    &dspp.to_ds);
 	if (err != 0) {
 		dsl_pool_rele(dspp.dp, FTAG);
 		return (err);
 	}
 
 	if (fromsnap != 0) {
-		err = dsl_dataset_hold_obj(dspp.dp, fromsnap, FTAG, &fromds);
+		err = dsl_dataset_hold_obj_flags(dspp.dp, fromsnap, dsflags,
+		    FTAG, &fromds);
 		if (err != 0) {
-			dsl_dataset_rele(dspp.to_ds, dsflags, FTAG);
+			dsl_dataset_rele_flags(dspp.to_ds, dsflags, FTAG);
 			dsl_pool_rele(dspp.dp, FTAG);
 			return (err);
 		}
@@ -2475,8 +2483,8 @@ dmu_send_obj(const char *pool, uint64_t tosnap, uint64_t fromsnap,
 int
 dmu_send(const char *tosnap, const char *fromsnap, boolean_t embedok,
     boolean_t large_block_ok, boolean_t compressok, boolean_t rawok,
-	uint64_t resumeobj, uint64_t resumeoff, const char *redactbook, int outfd,
-	offset_t *off, dmu_send_outparams_t *dsop)
+    uint64_t resumeobj, uint64_t resumeoff, const char *redactbook, int outfd,
+    offset_t *off, dmu_send_outparams_t *dsop)
 {
 	int err = 0;
 	ds_hold_flags_t dsflags = (rawok) ? 0 : DS_HOLD_FLAG_DECRYPT;
@@ -2511,7 +2519,8 @@ dmu_send(const char *tosnap, const char *fromsnap, boolean_t embedok,
 		err = dsl_dataset_own(dspp.dp, tosnap, dsflags, FTAG, &dspp.to_ds);
 		owned = B_TRUE;
 	} else {
-		err = dsl_dataset_hold(dp, tosnap, dsflags, FTAG, &ds);
+		err = dsl_dataset_hold_flags(dspp.dp, tosnap, dsflags, FTAG,
+		    &dspp.to_ds);
 	}
 
 	if (err != 0) {
@@ -2537,9 +2546,9 @@ dmu_send(const char *tosnap, const char *fromsnap, boolean_t embedok,
 	if (err != 0) {
 		dsl_pool_rele(dspp.dp, FTAG);
 		if (owned)
-			dsl_dataset_disown(dspp.to_ds, FTAG);
+			dsl_dataset_disown(dspp.to_ds, dsflags, FTAG);
 		else
-			dsl_dataset_rele(dspp.to_ds, FTAG);
+			dsl_dataset_rele_flags(dspp.to_ds, dsflags, FTAG);
 		return (err);
 	}
 
@@ -2631,7 +2640,7 @@ dmu_send(const char *tosnap, const char *fromsnap, boolean_t embedok,
 	if (owned)
 		dsl_dataset_disown(dspp.to_ds, dsflags, FTAG);
 	else
-		dsl_dataset_rele(dspp.to_ds, dsflags, FTAG);
+		dsl_dataset_rele_flags(dspp.to_ds, dsflags, FTAG);
 	return (err);
 }
 

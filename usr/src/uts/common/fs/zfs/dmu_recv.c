@@ -818,7 +818,7 @@ dmu_recv_resume_begin_check(void *arg, dmu_tx_t *tx)
 
 	if (dsl_dataset_hold_flags(dp, recvname, dsflags, FTAG, &ds) != 0) {
 		/* %recv does not exist; continue in tofs */
-		error = dsl_dataset_hold_flags(dp, tofs, flags, FTAG, &ds);
+		error = dsl_dataset_hold_flags(dp, tofs, dsflags, FTAG, &ds);
 		if (error != 0)
 			return (error);
 	}
@@ -1871,7 +1871,7 @@ receive_read_record(dmu_recv_cookie_t *drc)
 			    !!DRR_IS_RAW_BYTESWAPPED(drrw->drr_flags) ^
 			    drc->drc_byteswap;
 
-			abuf = arc_loan_raw_buf(dmu_objset_spa(ra->os),
+			abuf = arc_loan_raw_buf(dmu_objset_spa(drc->drc_os),
 			    drrw->drr_object, byteorder, drrw->drr_salt,
 			    drrw->drr_iv, drrw->drr_mac, drrw->drr_type,
 			    drrw->drr_compressed_size, drrw->drr_logical_size,
@@ -1952,18 +1952,18 @@ receive_read_record(dmu_recv_cookie_t *drc)
 		int len = DRR_SPILL_PAYLOAD_SIZE(drrs);
 
 		/* DRR_SPILL records are either raw or uncompressed */
-		if (ra->raw) {
+		if (drc->drc_raw) {
 			boolean_t byteorder = ZFS_HOST_BYTEORDER ^
 			    !!DRR_IS_RAW_BYTESWAPPED(drrs->drr_flags) ^
-			    ra->byteswap;
+			    drc->drc_byteswap;
 
-			abuf = arc_loan_raw_buf(dmu_objset_spa(ra->os),
+			abuf = arc_loan_raw_buf(dmu_objset_spa(drc->drc_os),
 			    drrs->drr_object, byteorder, drrs->drr_salt,
 			    drrs->drr_iv, drrs->drr_mac, drrs->drr_type,
 			    drrs->drr_compressed_size, drrs->drr_length,
 			    drrs->drr_compressiontype);
 		} else {
-			abuf = arc_loan_buf(dmu_objset_spa(ra->os),
+			abuf = arc_loan_buf(dmu_objset_spa(drc->drc_os),
 			    DMU_OT_IS_METADATA(drrs->drr_type),
 			    drrs->drr_length);
 		}

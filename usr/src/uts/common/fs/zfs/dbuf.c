@@ -1023,10 +1023,9 @@ dbuf_read_impl(dmu_buf_impl_t *db, zio_t *zio, uint32_t flags)
 		ASSERT(dsl_dataset_feature_is_active(
 		    db->db_objset->os_dsl_dataset,
 		    SPA_FEATURE_REDACTED_DATASETS));
-		zio->io_error = EIO;
 		DB_DNODE_EXIT(db);
 		mutex_exit(&db->db_mtx);
-		return;
+		return (SET_ERROR(EIO));
 	}
 
 	DB_DNODE_EXIT(db);

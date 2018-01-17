@@ -310,8 +310,12 @@ int dsl_dataset_hold_flags(struct dsl_pool *dp, const char *name,
     ds_hold_flags_t flags, void *tag, dsl_dataset_t **dsp);
 boolean_t dsl_dataset_try_add_ref(struct dsl_pool *dp, dsl_dataset_t *ds,
     void *tag);
-int dsl_dataset_hold_obj(struct dsl_pool *dp, uint64_t dsobj, void *tag,
-    dsl_dataset_t **);
+int dsl_dataset_hold_obj_flags(struct dsl_pool *dp, uint64_t dsobj,
+    ds_hold_flags_t flags, void *tag, dsl_dataset_t **);
+int dsl_dataset_hold_obj(struct dsl_pool *dp, uint64_t dsobj,
+    void *tag, dsl_dataset_t **);
+void dsl_dataset_rele_flags(dsl_dataset_t *ds, ds_hold_flags_t flags,
+    void *tag);
 void dsl_dataset_rele(dsl_dataset_t *ds, void *tag);
 int dsl_dataset_own(struct dsl_pool *dp, const char *name,
     ds_hold_flags_t flags, void *tag, dsl_dataset_t **dsp);
@@ -465,8 +469,6 @@ boolean_t dsl_dataset_feature_is_active(dsl_dataset_t *ds, spa_feature_t f);
 boolean_t dsl_dataset_get_uint64_array_feature(dsl_dataset_t *ds,
     spa_feature_t f, uint64_t *outlength, uint64_t **outp);
 	
-void dsl_dataset_activate_encryption(dsl_dataset_t *ds, dmu_tx_t *tx);
-
 void dsl_dataset_activate_redaction(dsl_dataset_t *ds, uint64_t *redact_snaps,
     uint64_t num_redact_snaps, dmu_tx_t *tx);
 

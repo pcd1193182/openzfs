@@ -966,7 +966,7 @@ dsl_dataset_get_uint64_array_feature(dsl_dataset_t *ds, spa_feature_t f,
 	return (B_TRUE);
 }
 
-static void
+void
 dsl_dataset_activate_feature(uint64_t dsobj, spa_feature_t f, void *arg,
     dmu_tx_t *tx)
 {
@@ -4506,15 +4506,6 @@ dsl_dataset_create_remap_deadlist(dsl_dataset_t *ds, dmu_tx_t *tx)
 	dsl_deadlist_open(&ds->ds_remap_deadlist, spa_meta_objset(spa),
 	    remap_deadlist_obj);
 	spa_feature_incr(spa, SPA_FEATURE_OBSOLETE_COUNTS, tx);
-}
-
-void
-dsl_dataset_activate_encryption(dsl_dataset_t *ds, dmu_tx_t *tx)
-{
-	uint64_t dsobj = ds->ds_object;
-	dsl_dataset_activate_feature(dsobj, SPA_FEATURE_ENCRYPTION,
-	    B_TRUE, tx);
-	ds->ds_feature[SPA_FEATURE_ENCRYPTION] = B_TRUE;
 }
 
 void
