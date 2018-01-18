@@ -186,7 +186,8 @@ struct send_range {
 	uint64_t		start_blkid;
 	uint64_t		end_blkid;
 	bqueue_node_t		ln;
-	enum type {DATA, HOLE, OBJECT, REDACT, PREVIOUSLY_REDACTED} type;
+	enum type {DATA, HOLE, OBJECT, OBJECT_RANGE, REDACT,
+	    PREVIOUSLY_REDACTED} type;
 	union {
 		struct srd {
 			dmu_object_type_t	obj_type;
@@ -198,17 +199,20 @@ struct send_range {
 		} hole;
 		struct sro {
 			/*
-			 * These are ointers because embedding them in the
+			 * This is a pointer because embedding it in the
 			 * struct causes these structures to be massively larger
 			 * for all range types; this makes the code much less
 			 * memory efficient.
 			 */
 			dnode_phys_t		*dnp;
-			blkptr_t		*bp;
+			blkptr_t		bp;
 		} object;
 		struct srr {
 			uint32_t		datablksz;
 		} redact;
+		struct sror {
+			blkptr_t		bp;
+		} object_range;
 	} sru;
 };
 
@@ -249,8 +253,6 @@ range_free(struct send_range *range)
 	if (range->type == OBJECT) {
 		kmem_free(range->sru.object.dnp,
 		    sizeof (*range->sru.object.dnp));
-		kmem_free(range->sru.object.bp,
-		    sizeof (*range->sru.object.bp));
 	}
 	kmem_free(range, sizeof (*range));
 }
@@ -632,7 +634,7 @@ dump_freeobjects(dmu_send_cookie_t *dscp, uint64_t firstobj, uint64_t numobjs)
 	}
 	if (numobjs == 0)
 		numobjs = UINT64_MAX - firstobj;
-	
+
 	if (dscp->dsc_pending_op == PENDING_FREEOBJECTS) {
 		/*
 		 * See whether this free object array can be aggregated
@@ -744,8 +746,8 @@ dump_dnode(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t object,
 }
 
 static int
-dump_object_range(dmu_send_cookie_t *dscp, const blkptr_t *bp, uint64_t firstobj,
-    uint64_t numslots)
+dump_object_range(dmu_send_cookie_t *dscp, const blkptr_t *bp,
+    uint64_t firstobj, uint64_t numslots)
 {
 	struct drr_object_range *drror =
 	    &(dscp->dsc_drr->drr_u.drr_object_range);
@@ -816,9 +818,17 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 	int err = 0;
 	switch (range->type) {
 	case OBJECT:
-		err = dump_dnode(dscp, range->sru.object.bp, range->object,
+		err = dump_dnode(dscp, &range->sru.object.bp, range->object,
 		    range->sru.object.dnp);
 		return (err);
+	case OBJECT_RANGE: {
+		ASSERT3U(range->start_blkid, ==, range->end_blkid + 1);
+		uint64_t epb = BP_GET_LSIZE(&range->sru.object_range.bp);
+		uint64_t firstobj = range->start_blkid * epb;
+		err = dump_object_range(dscp, &range->sru.object_range.bp,
+		    firstobj, epb);
+		break;
+	}
 	case REDACT: {
 		struct srr *srrp = &range->sru.redact;
 		err = dump_redact(dscp, range->object, range->start_blkid *
@@ -1065,10 +1075,18 @@ send_cb(spa_t *spa, zilog_t *zilog, const blkptr_t *bp,
 		if (zb->zb_object == DMU_META_DNODE_OBJECT)
 			return (0);
 		record = range_alloc(OBJECT, zb->zb_object, 0, 0, B_FALSE);
-		record->sru.object.bp = kmem_alloc(sizeof (*bp), KM_SLEEP);
-		*record->sru.object.bp = *bp;
+		record->sru.object.bp = *bp;
 		record->sru.object.dnp = kmem_alloc(sizeof (*dnp), KM_SLEEP);
 		*record->sru.object.dnp = *dnp;
+		bqueue_enqueue(&sta->q, record, sizeof (*record));
+		return (0);
+	}
+	if (zb->zb_level == 0 && zb->zb_object == DMU_META_DNODE_OBJECT) {
+		if (BP_IS_HOLE(bp))
+			return (0);
+		record = range_alloc(OBJECT_RANGE, 0, zb->zb_blkid,
+		    zb->zb_blkid + 1, B_FALSE);
+		record->sru.object_range.bp = *bp;
 		bqueue_enqueue(&sta->q, record, sizeof (*record));
 		return (0);
 	}
@@ -1298,6 +1316,10 @@ send_range_start_compare(struct send_range *r1, struct send_range *r2)
 		return (-1);
 	if (r1_objequiv > r2_objequiv)
 		return (1);
+	if (r1->type == OBJECT_RANGE && r2->type != OBJECT_RANGE)
+		return (-1);
+	if (r1->type != OBJECT_RANGE && r2->type == OBJECT_RANGE)
+		return (1);
 	if (r1->type == OBJECT && r2->type != OBJECT)
 		return (-1);
 	if (r1->type != OBJECT && r2->type == OBJECT)
@@ -1310,7 +1332,7 @@ send_range_start_compare(struct send_range *r1, struct send_range *r2)
 }
 
 enum q_idx {
-	REDACT_IDX,
+	REDACT_IDX = 0,
 	TO_IDX,
 	FROM_IDX,
 	NUM_THREADS
@@ -1363,6 +1385,18 @@ find_next_range(struct send_range **ranges, bqueue_t **qs, uint64_t *out_mask)
 			bmask |= 1 << i;
 	}
 	*out_mask = bmask;
+	/*
+	 * OBJECT_RANGE records only come from the TO thread, and should always
+	 * be treated as overlapping with nothing and sent on immediately.  They
+	 * are only used in raw sends, and are never redacted.
+	 */
+	if (ranges[idx]->type == OBJECT_RANGE) {
+		ASSERT3U(idx, ==, TO_IDX);
+		ASSERT3U(*out_mask, ==, 1 << TO_IDX);
+		struct send_range *ret = ranges[idx];
+		ranges[idx] = get_next_range_nofree(qs[idx], ranges[idx]);
+		return (ret);
+	}
 	/*
 	 * Find the first start or end point after the start of the first range.
 	 */
@@ -1627,6 +1661,7 @@ send_prefetch_thread(void *arg)
 		}
 		case HOLE:
 		case OBJECT:
+		case OBJECT_RANGE:
 		case REDACT: // Redacted blocks must exist
 			bqueue_enqueue(outq, range, sizeof (*range));
 			range = get_next_range_nofree(inq, range);
@@ -2287,7 +2322,7 @@ dmu_send_impl(struct dmu_send_params *dspp)
 		if (err != 0)
 			goto out;
 	}
-	
+
 	if (featureflags & DMU_BACKUP_FEATURE_RAW) {
 		nvlist_t *keynvl = NULL;
 		ASSERT(os->os_encrypted);
@@ -2715,7 +2750,7 @@ dmu_send_estimate_fast(dsl_dataset_t *ds, dsl_dataset_t *fromds,
 
 	ASSERT(dsl_pool_config_held(dp));
 	ASSERT(fromds == NULL || frombook == NULL);
-	
+
 	/* tosnap must be a snapshot */
 	if (!ds->ds_is_snapshot)
 		return (SET_ERROR(EINVAL));
