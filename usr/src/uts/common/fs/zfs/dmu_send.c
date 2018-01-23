@@ -822,7 +822,7 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 		    range->sru.object.dnp);
 		return (err);
 	case OBJECT_RANGE: {
-		ASSERT3U(range->start_blkid, ==, range->end_blkid + 1);
+		ASSERT3U(range->start_blkid + 1, ==, range->end_blkid);
 		uint64_t epb = BP_GET_LSIZE(&range->sru.object_range.bp);
 		uint64_t firstobj = range->start_blkid * epb;
 		err = dump_object_range(dscp, &range->sru.object_range.bp,
@@ -1217,12 +1217,12 @@ send_range_after(const struct send_range *from, const struct send_range *to)
 	uint64_t to_obj = to->object;
 	uint64_t to_end_obj = to->object + 1;
 	if (from_obj == 0) {
-		ASSERT3U(from->type, ==, HOLE);
+		ASSERT(from->type == HOLE || from->type == OBJECT_RANGE);
 		from_obj = from->start_blkid << DNODES_PER_BLOCK_SHIFT;
 		from_end_obj = from->end_blkid << DNODES_PER_BLOCK_SHIFT;
 	}
 	if (to_obj == 0) {
-		ASSERT3U(to->type, ==, HOLE);
+		ASSERT(to->type == HOLE || to->type == OBJECT_RANGE);
 		to_obj = to->start_blkid << DNODES_PER_BLOCK_SHIFT;
 		to_end_obj = to->end_blkid << DNODES_PER_BLOCK_SHIFT;
 	}
@@ -1230,6 +1230,10 @@ send_range_after(const struct send_range *from, const struct send_range *to)
 	if (from_end_obj <= to_obj)
 		return (-1);
 	if (from_obj >= to_end_obj)
+		return (1);
+	if (from->type == OBJECT_RANGE && to->type != OBJECT_RANGE)
+		return (-1);
+	if (from->type != OBJECT_RANGE && to->type == OBJECT_RANGE)
 		return (1);
 	if (from->type == OBJECT && to->type != OBJECT)
 		return (-1);
