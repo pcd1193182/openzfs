@@ -823,6 +823,9 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 		return (err);
 	case OBJECT_RANGE: {
 		ASSERT3U(range->start_blkid + 1, ==, range->end_blkid);
+		if (!(dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW)) {
+			return (0);
+		}
 		uint64_t epb = BP_GET_LSIZE(&range->sru.object_range.bp);
 		uint64_t firstobj = range->start_blkid * epb;
 		err = dump_object_range(dscp, &range->sru.object_range.bp,
