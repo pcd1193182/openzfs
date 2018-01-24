@@ -4604,20 +4604,6 @@ dump_bytes(void *buf, int len, void *arg)
 	ssize_t resid; /* have to get resid to get detailed errno */
 	int err;
 
-	/*
-	 * The code does not rely on this (len being a multiple of 8).  We keep
-	 * this assertion because of the corresponding assertion in
-	 * receive_read().  Keeping this assertion ensures that we do not
-	 * inadvertently break backwards compatibility (causing the assertion
-	 * in receive_read() to trigger on old software).
-	 *
-	 * Removing the assertions could be rolled into a new feature that uses
-	 * data that isn't 8-byte aligned; if the assertions were removed, a
-	 * feature flag would have to be added.
-	 */
-
-	ASSERT0(len % 8);
-
 	err = vn_rdwr(UIO_WRITE, vp, (caddr_t)buf, len, 0, UIO_SYSSPACE,
 	    FAPPEND, RLIM64_INFINITY, CRED(), &resid);
 

@@ -299,6 +299,21 @@ dump_record(dmu_send_cookie_t *dscp, void *payload, int payload_len)
 			(void) fletcher_4_incremental_native(
 			    payload, payload_len, &dscp->dsc_zc);
 		}
+
+		/*
+		 * The code does not rely on this (len being a multiple of 8).
+		 * We keep this assertion because of the corresponding assertion
+		 * in receive_read().  Keeping this assertion ensures that we do
+		 * not inadvertently break backwards compatibility (causing the
+		 * assertion in receive_read() to trigger on old software).
+		 *
+		 * Raw sends cannot be received on old software, and so can
+		 * bypass this assertion.
+		 */
+
+		ASSERT((payload_len % 8 == 0) ||
+		    (dscp->dsc_featureflags & DMU_BACKUP_FEATURE_RAW));
+
 		dscp->dsc_err = dso->dso_outfunc(payload, payload_len,
 		    dso->dso_arg);
 		if (dscp->dsc_err != 0)
