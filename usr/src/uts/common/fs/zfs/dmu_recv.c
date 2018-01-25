@@ -472,7 +472,7 @@ dmu_recv_begin_check(void *arg, dmu_tx_t *tx)
 	int flags = drrb->drr_flags;
 	ds_hold_flags_t dsflags = 0;
 	int error;
-	uint64_t featureflags = DMU_GET_FEATUREFLAGS(drrb->drr_versioninfo);
+	uint64_t featureflags = drba->drba_cookie->drc_featureflags;
 	dsl_dataset_t *ds;
 	const char *tofs = drba->drba_cookie->drc_tofs;
 
@@ -615,7 +615,7 @@ dmu_recv_begin_sync(void *arg, dmu_tx_t *tx)
 	dmu_recv_cookie_t *drc = drba->drba_cookie;
 	struct drr_begin *drrb = drc->drc_drrb;
 	const char *tofs = drc->drc_tofs;
-	uint64_t featureflags = DMU_GET_FEATUREFLAGS(drrb->drr_versioninfo);
+	uint64_t featureflags = drc->drc_featureflags;
 	dsl_dataset_t *ds, *newds;
 	objset_t *os;
 	uint64_t dsobj;
@@ -745,8 +745,7 @@ dmu_recv_begin_sync(void *arg, dmu_tx_t *tx)
 	}
 
 
-	if (DMU_GET_FEATUREFLAGS(drrb->drr_versioninfo) &
-	    DMU_BACKUP_FEATURE_REDACTED) {
+	if (featureflags & DMU_BACKUP_FEATURE_REDACTED) {
 		uint64_t *redact_snaps;
 		uint_t numredactsnaps;
 		VERIFY0(nvlist_lookup_uint64_array(drc->drc_begin_nvl,
@@ -786,13 +785,12 @@ dmu_recv_resume_begin_check(void *arg, dmu_tx_t *tx)
 	struct drr_begin *drrb = drc->drc_drrb;
 	int error;
 	ds_hold_flags_t dsflags = 0;
-	uint64_t featureflags = DMU_GET_FEATUREFLAGS(drrb->drr_versioninfo);
 	dsl_dataset_t *ds;
 	const char *tofs = drc->drc_tofs;
 
 	/* already checked */
 	ASSERT3U(drrb->drr_magic, ==, DMU_BACKUP_MAGIC);
-	ASSERT(featureflags & DMU_BACKUP_FEATURE_RESUMING);
+	ASSERT(drc->drc_featureflags & DMU_BACKUP_FEATURE_RESUMING);
 
 	if (DMU_GET_STREAM_HDRTYPE(drrb->drr_versioninfo) ==
 	    DMU_COMPOUNDSTREAM ||
@@ -803,7 +801,8 @@ dmu_recv_resume_begin_check(void *arg, dmu_tx_t *tx)
 	 * This is mostly a sanity check since we should have already done these
 	 * checks during a previous attempt to receive the data.
 	 */
-	error = recv_begin_check_feature_flags_impl(featureflags, dp->dp_spa);
+	error = recv_begin_check_feature_flags_impl(drc->drc_featureflags,
+	    dp->dp_spa);
 	if (error != 0)
 		return (error);
 
@@ -813,7 +812,7 @@ dmu_recv_resume_begin_check(void *arg, dmu_tx_t *tx)
 	(void) snprintf(recvname, sizeof (recvname), "%s/%s",
 	    tofs, recv_clone_name);
 
-	if ((featureflags & DMU_BACKUP_FEATURE_RAW) == 0)
+	if ((drc->drc_featureflags & DMU_BACKUP_FEATURE_RAW) == 0)
 		dsflags |= DS_HOLD_FLAG_DECRYPT;
 
 	if (dsl_dataset_hold_flags(dp, recvname, dsflags, FTAG, &ds) != 0) {
@@ -877,7 +876,7 @@ dmu_recv_resume_begin_check(void *arg, dmu_tx_t *tx)
 	 * must have been redacted, and must have been redacted with respect to
 	 * the same snapshots.
 	 */
-	if (featureflags & DMU_BACKUP_FEATURE_REDACTED) {
+	if (drc->drc_featureflags & DMU_BACKUP_FEATURE_REDACTED) {
 		uint64_t num_ds_redact_snaps;
 		uint64_t *ds_redact_snaps;
 
@@ -917,7 +916,7 @@ dmu_recv_resume_begin_sync(void *arg, dmu_tx_t *tx)
 	dsl_pool_t *dp = dmu_tx_pool(tx);
 	const char *tofs = drba->drba_cookie->drc_tofs;
 	struct drr_begin *drrb = drba->drba_cookie->drc_drrb;
-	uint64_t featureflags = DMU_GET_FEATUREFLAGS(drrb->drr_versioninfo);
+	uint64_t featureflags = drba->drba_cookie->drc_featureflags;
 	dsl_dataset_t *ds;
 	objset_t *os;
 	ds_hold_flags_t dsflags = 0;
@@ -987,6 +986,8 @@ dmu_recv_begin(char *tofs, char *tosnap, dmu_replay_record_t *drr_begin,
 
 	drc->drc_vp = vp;
 	drc->drc_voff = *voffp;
+	drc->drc_featureflags =
+	    DMU_GET_FEATUREFLAGS(drc->drc_drrb->drr_versioninfo);
 
 	uint32_t payloadlen = drc->drc_drr_begin->drr_payloadlen;
 	void *payload = NULL;
@@ -1014,8 +1015,7 @@ dmu_recv_begin(char *tofs, char *tosnap, dmu_replay_record_t *drr_begin,
 	drba.drba_cookie = drc;
 	drba.drba_cred = CRED();
 
-	if (DMU_GET_FEATUREFLAGS(drc->drc_drrb->drr_versioninfo) &
-	    DMU_BACKUP_FEATURE_RESUMING) {
+	if (drc->drc_featureflags & DMU_BACKUP_FEATURE_RESUMING) {
 		err = dsl_sync_task(tofs,
 		    dmu_recv_resume_begin_check, dmu_recv_resume_begin_sync,
 		    &drba, 5, ZFS_SPACE_CHECK_NORMAL);
@@ -2152,7 +2152,6 @@ dmu_recv_stream(dmu_recv_cookie_t *drc, int cleanup_fd,
 {
 	int err = 0;
 	struct receive_writer_arg rwa = { 0 };
-	int featureflags;
 
 	if (dsl_dataset_is_zapified(drc->drc_ds)) {
 		uint64_t bytes;
@@ -2176,17 +2175,15 @@ dmu_recv_stream(dmu_recv_cookie_t *drc, int cleanup_fd,
 
 	ASSERT(dsl_dataset_phys(drc->drc_ds)->ds_flags & DS_FLAG_INCONSISTENT);
 
-	featureflags = DMU_GET_FEATUREFLAGS(drc->drc_drrb->drr_versioninfo);
-
 	/* embedded data is incompatible with encrypted datasets */
 	if (drc->drc_os->os_encrypted &&
-	    (featureflags & DMU_BACKUP_FEATURE_EMBED_DATA)) {
+	    (drc->drc_featureflags & DMU_BACKUP_FEATURE_EMBED_DATA)) {
 		err = SET_ERROR(EINVAL);
 		goto out;
 	}
 
 	/* if this stream is dedup'ed, set up the avl tree for guid mapping */
-	if (featureflags & DMU_BACKUP_FEATURE_DEDUP) {
+	if (drc->drc_featureflags & DMU_BACKUP_FEATURE_DEDUP) {
 		minor_t minor;
 
 		if (cleanup_fd == -1) {
@@ -2221,7 +2218,7 @@ dmu_recv_stream(dmu_recv_cookie_t *drc, int cleanup_fd,
 	}
 
 	/* handle DSL encryption key payload */
-	if (featureflags & DMU_BACKUP_FEATURE_RAW) {
+	if (drc->drc_featureflags & DMU_BACKUP_FEATURE_RAW) {
 		nvlist_t *keynvl = NULL;
 
 		ASSERT(drc->drc_os->os_encrypted);
@@ -2239,7 +2236,7 @@ dmu_recv_stream(dmu_recv_cookie_t *drc, int cleanup_fd,
 			goto out;
 	}
 
-	if (featureflags & DMU_BACKUP_FEATURE_RESUMING) {
+	if (drc->drc_featureflags & DMU_BACKUP_FEATURE_RESUMING) {
 		err = resume_check(drc, drc->drc_begin_nvl);
 		if (err != 0)
 			goto out;
@@ -2319,7 +2316,8 @@ dmu_recv_stream(dmu_recv_cookie_t *drc, int cleanup_fd,
 
 out:
 	nvlist_free(drc->drc_begin_nvl);
-	if ((featureflags & DMU_BACKUP_FEATURE_DEDUP) && (cleanup_fd != -1))
+	if ((drc->drc_featureflags & DMU_BACKUP_FEATURE_DEDUP) &&
+	    (cleanup_fd != -1))
 		zfs_onexit_fd_rele(cleanup_fd);
 
 	if (err != 0) {
