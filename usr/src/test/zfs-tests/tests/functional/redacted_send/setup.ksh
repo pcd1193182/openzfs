@@ -21,7 +21,7 @@
 #
 
 #
-# Copyright (c) 2016 by Delphix. All rights reserved.
+# Copyright (c) 2018 by Delphix. All rights reserved.
 #
 
 . $STF_SUITE/tests/functional/redacted_send/redacted.kshlib

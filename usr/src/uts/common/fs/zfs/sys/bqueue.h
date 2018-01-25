@@ -13,7 +13,7 @@
  * CDDL HEADER END
  */
 /*
- * Copyright (c) 2014, 2016 by Delphix. All rights reserved.
+ * Copyright (c) 2014, 2018 by Delphix. All rights reserved.
  */
 
 #ifndef	_BQUEUE_H

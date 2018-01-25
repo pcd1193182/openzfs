@@ -19,7 +19,7 @@
  * CDDL HEADER END
  */
 /*
- * Copyright (c) 2017 by Delphix. All rights reserved.
+ * Copyright (c) 2018 by Delphix. All rights reserved.
  */
 #ifndef _DMU_REDACT_H_
 #define	_DMU_REDACT_H_
