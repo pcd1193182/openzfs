@@ -41,7 +41,8 @@ typedef struct segment {
 } seg_t;
 
 static int
-no_memory(void) {
+no_memory(void)
+{
 	(void) fprintf(stderr, "malloc failed\n");
 	return (UMEM_CALLBACK_EXIT(255));
 }

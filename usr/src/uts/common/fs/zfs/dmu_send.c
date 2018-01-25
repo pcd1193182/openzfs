@@ -497,7 +497,8 @@ dump_write(dmu_send_cookie_t *dscp, dmu_object_type_t type, uint64_t object,
 
 	/* only set the compression fields if the buf is compressed or raw */
 	if (raw || lsize != psize) {
-		ASSERT(raw || dscp->dsc_featureflags & DMU_BACKUP_FEATURE_COMPRESSED);
+		ASSERT(raw || dscp->dsc_featureflags &
+		    DMU_BACKUP_FEATURE_COMPRESSED);
 		ASSERT(!BP_IS_EMBEDDED(bp));
 		ASSERT3S(psize, >, 0);
 
@@ -946,7 +947,7 @@ do_dump(dmu_send_cookie_t *dscp, struct send_range *range)
 			else if (request_compressed)
 				zioflags |= ZIO_FLAG_RAW_COMPRESS;
 			zbookmark_phys_t zb;
-                        zb.zb_objset = dmu_objset_id(dscp->dsc_os);
+			zb.zb_objset = dmu_objset_id(dscp->dsc_os);
 			zb.zb_object = range->object;
 			zb.zb_level = 0;
 			zb.zb_blkid = range->start_blkid;
@@ -1837,7 +1838,7 @@ setup_featureflags(struct dmu_send_params *dspp, objset_t *os,
 
 	/* raw sends imply large_block_ok */
 	if ((dspp->rawok || dspp->large_block_ok) &&
-		dsl_dataset_feature_is_active(to_ds, SPA_FEATURE_LARGE_BLOCKS)) {
+	    dsl_dataset_feature_is_active(to_ds, SPA_FEATURE_LARGE_BLOCKS)) {
 		*featureflags |= DMU_BACKUP_FEATURE_LARGE_BLOCKS;
 	}
 
@@ -2580,7 +2581,8 @@ dmu_send(const char *tosnap, const char *fromsnap, boolean_t embedok,
 		 * We are sending a filesystem or volume.  Ensure
 		 * that it doesn't change by owning the dataset.
 		 */
-		err = dsl_dataset_own(dspp.dp, tosnap, dsflags, FTAG, &dspp.to_ds);
+		err = dsl_dataset_own(dspp.dp, tosnap, dsflags, FTAG,
+		    &dspp.to_ds);
 		owned = B_TRUE;
 	} else {
 		err = dsl_dataset_hold_flags(dspp.dp, tosnap, dsflags, FTAG,

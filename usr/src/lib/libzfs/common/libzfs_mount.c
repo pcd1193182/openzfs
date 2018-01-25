@@ -297,7 +297,7 @@ zfs_is_mounted(zfs_handle_t *zhp, char **where)
  */
 static boolean_t
 zfs_is_mountable(zfs_handle_t *zhp, char *buf, size_t buflen,
-     zprop_source_t *source, int flags)
+    zprop_source_t *source, int flags)
 {
 	char sourceloc[MAXNAMELEN];
 	zprop_source_t sourcetype;
@@ -324,7 +324,7 @@ zfs_is_mountable(zfs_handle_t *zhp, char *buf, size_t buflen,
 		return (B_FALSE);
 
 	if (zfs_prop_get_int(zhp, ZFS_PROP_REDACTED) && !(flags & MS_FORCE))
-                return (B_FALSE);
+		return (B_FALSE);
 
 	if (source)
 		*source = sourcetype;

@@ -599,7 +599,7 @@ lzc_send_resume_redacted(const char *snapname, const char *from, int fd,
 	}
 	if (redactbook != NULL)
 		fnvlist_add_string(args, "redactbook", redactbook);
-	
+
 	err = lzc_ioctl(ZFS_IOC_SEND_NEW, snapname, args, NULL);
 	nvlist_free(args);
 	return (err);
@@ -781,7 +781,8 @@ int
 lzc_receive(const char *snapname, nvlist_t *props, const char *origin,
     boolean_t raw, boolean_t force, int fd)
 {
-	return (recv_impl(snapname, props, origin, force, B_FALSE, raw, fd, NULL));
+	return (recv_impl(snapname, props, origin, force, B_FALSE, raw, fd,
+	    NULL));
 }
 
 /*
@@ -794,7 +795,8 @@ int
 lzc_receive_resumable(const char *snapname, nvlist_t *props, const char *origin,
     boolean_t force, boolean_t raw, int fd)
 {
-	return (recv_impl(snapname, props, origin, force, B_TRUE, raw, fd, NULL));
+	return (recv_impl(snapname, props, origin, force, B_TRUE, raw, fd,
+	    NULL));
 }
 
 /*

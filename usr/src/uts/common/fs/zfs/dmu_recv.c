@@ -1968,7 +1968,7 @@ receive_read_record(dmu_recv_cookie_t *drc)
 			    drrs->drr_length);
 		}
 		err = receive_read_payload_and_next_header(drc,
-		     drrs->drr_length, abuf->b_data);
+		    drrs->drr_length, abuf->b_data);
 		if (err != 0)
 			dmu_return_arcbuf(abuf);
 		else

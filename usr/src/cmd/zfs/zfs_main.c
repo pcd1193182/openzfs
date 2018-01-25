@@ -3842,7 +3842,7 @@ zfs_do_send(int argc, char **argv)
 
 	struct option long_options[] = {
 		{"replicate",	no_argument,		NULL, 'R'},
-		{"redact-bookmark",     required_argument, NULL, REDACT_OPT},
+		{"redact-bookmark",	required_argument, NULL, REDACT_OPT},
 		{"props",	no_argument,		NULL, 'p'},
 		{"parsable",	no_argument,		NULL, 'P'},
 		{"dedup",	no_argument,		NULL, 'D'},
@@ -7477,7 +7477,7 @@ load_unload_keys(int argc, char **argv, boolean_t loadkey)
 	argv += optind;
 
 	if (!do_all && argc == 0) {
-	    (void) fprintf(stderr,
+		(void) fprintf(stderr,
 		    gettext("Missing dataset argument or -a option\n"));
 		usage(B_FALSE);
 	}

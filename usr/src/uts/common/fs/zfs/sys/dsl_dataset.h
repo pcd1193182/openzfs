@@ -469,7 +469,7 @@ void dsl_dataset_deactivate_feature(dsl_dataset_t *ds, spa_feature_t f,
 boolean_t dsl_dataset_feature_is_active(dsl_dataset_t *ds, spa_feature_t f);
 boolean_t dsl_dataset_get_uint64_array_feature(dsl_dataset_t *ds,
     spa_feature_t f, uint64_t *outlength, uint64_t **outp);
-	
+
 void dsl_dataset_activate_redaction(dsl_dataset_t *ds, uint64_t *redact_snaps,
     uint64_t num_redact_snaps, dmu_tx_t *tx);
 

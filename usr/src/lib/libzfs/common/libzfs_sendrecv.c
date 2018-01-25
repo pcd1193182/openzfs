@@ -2126,13 +2126,14 @@ send_prelim_records(zfs_handle_t *zhp, const char *from, int fd,
 		fnvlist_add_string(hdrnv, "tosnap", tosnap);
 		if (!recursive)
 			fnvlist_add_boolean(hdrnv, "not_recursive");
-			
+
 		if (raw) {
 			VERIFY0(nvlist_add_boolean(hdrnv, "raw"));
 		}
 
 		if ((err = gather_nvlist(zhp->zfs_hdl, tofs,
-		    from, tosnap, recursive, raw, verbose, &fss, fsavlp)) != 0) {
+		    from, tosnap, recursive, raw, verbose, &fss, fsavlp))
+		    != 0) {
 			return (zfs_error(zhp->zfs_hdl, EZFS_BADBACKUP,
 			    errbuf));
 		}

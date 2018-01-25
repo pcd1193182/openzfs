@@ -331,7 +331,7 @@ zpool_feature_init(void)
 	    "Reduce memory used by removed devices when their blocks are "
 	    "freed or remapped.",
 	    ZFEATURE_FLAG_READONLY_COMPAT, ZFEATURE_TYPE_BOOLEAN,
-		obsolete_counts_deps);
+	    obsolete_counts_deps);
 
 	static const spa_feature_t encryption_deps[] = {
 		SPA_FEATURE_EXTENSIBLE_DATASET,
@@ -341,6 +341,6 @@ zpool_feature_init(void)
 	    "com.datto:encryption", "encryption",
 	    "Support for dataset level encryption",
 	    ZFEATURE_FLAG_PER_DATASET, ZFEATURE_TYPE_BOOLEAN,
-		encryption_deps);
+	    encryption_deps);
 
 }
