@@ -915,10 +915,8 @@ dmu_recv_resume_begin_sync(void *arg, dmu_tx_t *tx)
 	dmu_recv_begin_arg_t *drba = arg;
 	dsl_pool_t *dp = dmu_tx_pool(tx);
 	const char *tofs = drba->drba_cookie->drc_tofs;
-	struct drr_begin *drrb = drba->drba_cookie->drc_drrb;
 	uint64_t featureflags = drba->drba_cookie->drc_featureflags;
 	dsl_dataset_t *ds;
-	objset_t *os;
 	ds_hold_flags_t dsflags = 0;
 	/* 6 extra bytes for /%recv */
 	char recvname[ZFS_MAX_DATASET_NAME_LEN + 6];
@@ -1949,8 +1947,6 @@ receive_read_record(dmu_recv_cookie_t *drc)
 	{
 		struct drr_spill *drrs = &drc->drc_rrd->header.drr_u.drr_spill;
 		arc_buf_t *abuf;
-		int len = DRR_SPILL_PAYLOAD_SIZE(drrs);
-
 		/* DRR_SPILL records are either raw or uncompressed */
 		if (drc->drc_raw) {
 			boolean_t byteorder = ZFS_HOST_BYTEORDER ^
