@@ -836,7 +836,7 @@ send_iterate_fs(zfs_handle_t *zhp, void *arg)
 			    "exist\n"), sd->fsname, sd->tosnap, sd->recursive ?
 			    dgettext(TEXT_DOMAIN, " recursively") : "",
 			    zhp->zfs_name, sd->tosnap);
-			rv = -1;
+			rv = EZFS_NOENT;
 		}
 		goto out;
 	}
@@ -2133,7 +2133,6 @@ send_prelim_records(zfs_handle_t *zhp, const char *from, int fd,
 
 		if ((err = gather_nvlist(zhp->zfs_hdl, tofs,
 		    from, tosnap, recursive, raw, verbose, &fss, fsavlp)) != 0) {
-			err = zfs_standard_error(zhp->zfs_hdl, err, errbuf);
 			return (zfs_error(zhp->zfs_hdl, EZFS_BADBACKUP,
 			    errbuf));
 		}
