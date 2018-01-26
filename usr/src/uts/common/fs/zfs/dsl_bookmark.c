@@ -549,7 +549,7 @@ dsl_get_bookmarks_impl(dsl_dataset_t *ds, nvlist_t *props, nvlist_t *outnvl)
 	ASSERT(dsl_pool_config_held(dp));
 
 	if (dsl_dataset_is_snapshot(ds))
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 
 	for (dsl_bookmark_node_t *dbn = avl_first(&ds->ds_bookmarks);
 	    dbn != NULL; dbn = AVL_NEXT(&ds->ds_bookmarks, dbn)) {

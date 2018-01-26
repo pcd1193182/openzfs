@@ -328,14 +328,14 @@ recv_begin_check_existing_impl(dmu_recv_begin_arg_t *drba, dsl_dataset_t *ds,
 	    dsl_dir_phys(ds->ds_dir)->dd_child_dir_zapobj, recv_clone_name,
 	    8, 1, &val);
 	if (error != ENOENT)
-		return (error == 0 ? EBUSY : error);
+		return (error == 0 ? SET_ERROR(EBUSY) : error);
 
 	/* new snapshot name must not exist */
 	error = zap_lookup(dp->dp_meta_objset,
 	    dsl_dataset_phys(ds)->ds_snapnames_zapobj,
 	    drba->drba_cookie->drc_tosnap, 8, 1, &val);
 	if (error != ENOENT)
-		return (error == 0 ? EEXIST : error);
+		return (error == 0 ? SET_ERROR(EEXIST) : error);
 
 	/*
 	 * Check snapshot limit before receiving. We'll recheck again at the
@@ -1479,15 +1479,15 @@ receive_write_embedded(struct receive_writer_arg *rwa,
 	int err;
 
 	if (drrwe->drr_offset + drrwe->drr_length < drrwe->drr_offset)
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 
 	if (drrwe->drr_psize > BPE_PAYLOAD_SIZE)
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 
 	if (drrwe->drr_etype >= NUM_BP_EMBEDDED_TYPES)
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 	if (drrwe->drr_compression >= ZIO_COMPRESS_FUNCTIONS)
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 
 	tx = dmu_tx_create(rwa->os);
 

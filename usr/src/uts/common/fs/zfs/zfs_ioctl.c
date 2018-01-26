@@ -3667,7 +3667,7 @@ zfs_ioc_get_bookmark_props(const char *bookmark, nvlist_t *innvl,
 
 	bmname = strchr(bookmark, '#');
 	if (bmname == NULL)
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 	bmname++;
 
 	(void) strlcpy(fsname, bookmark, sizeof (fsname));
