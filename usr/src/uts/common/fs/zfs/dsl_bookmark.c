@@ -870,7 +870,7 @@ dsl_bookmark_destroy_check(void *arg, dmu_tx_t *tx)
 					error = 0;
 				} else if (error == 0 &&
 				    dsl_redaction_list_long_held(rl)) {
-					error = EBUSY;
+					error = SET_ERROR(EBUSY);
 				}
 				if (rl != NULL) {
 					dsl_redaction_list_rele(rl, FTAG);
@@ -1414,7 +1414,7 @@ dsl_redaction_list_traverse(redaction_list_t *rl, zbookmark_phys_t *resume,
 		 * it can be traversed, so return EINVAL if the last object and
 		 * blkid are not set to UINT64_MAX.
 		 */
-		return (EINVAL);
+		return (SET_ERROR(EINVAL));
 	}
 
 	/*

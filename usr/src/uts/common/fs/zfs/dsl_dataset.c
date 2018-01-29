@@ -4244,7 +4244,7 @@ dsl_dataset_space_written_bookmark(zfs_bookmark_phys_t *bmp,
     dsl_dataset_t *new, uint64_t *usedp, uint64_t *compp, uint64_t *uncompp)
 {
 	if (!(bmp->zbm_flags & ZBM_FLAG_HAS_FBN))
-		return (ENOTSUP);
+		return (SET_ERROR(ENOTSUP));
 	return (dsl_dataset_space_written_impl(bmp, new,
 	    usedp, compp, uncompp));
 }

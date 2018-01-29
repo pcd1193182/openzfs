@@ -1019,6 +1019,11 @@ dbuf_read_impl(dmu_buf_impl_t *db, zio_t *zio, uint32_t flags)
 		return (0);
 	}
 
+	/*
+	 * Any attempt to read a redacted block should result in an error. This
+	 * will never happen under normal conditions, but can be useful for
+	 * debugging purposes.
+	 */
 	if (BP_IS_REDACTED(db->db_blkptr)) {
 		ASSERT(dsl_dataset_feature_is_active(
 		    db->db_objset->os_dsl_dataset,
